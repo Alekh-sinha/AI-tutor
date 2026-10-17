@@ -3,7 +3,7 @@ WEB_PORT=5198 uv run --offline --with playwright==1.63.0 python -u tests/e2e/ui_
 import glob, os, sys
 from playwright.sync_api import sync_playwright
 
-WEB = f"http://localhost:{os.environ.get('WEB_PORT', '5198')}"
+WEB = os.environ.get('BASE') or f"http://localhost:{os.environ.get('WEB_PORT', '5198')}"
 OUT = sys.argv[1]
 PATHS = sys.argv[2:] or ["/", "/lessons", "/live", "/teacher", "/admin", "/?lesson=lesson-1-v2", "/teacher?chapter=ch6"]
 CHROME = os.environ.get("CHROME") or sorted(glob.glob(os.path.expanduser("~/.cache/ms-playwright/chromium-*/chrome-linux64/chrome")))[-1]
