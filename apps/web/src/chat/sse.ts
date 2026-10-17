@@ -1,7 +1,12 @@
+import { readError } from "../ss/api";
+
 /** POST to /api/chat and call `onEvent` for every server-sent event (the stream ends with {type:"done"}). Throws on HTTP errors. */
 export async function streamChat<E>(body: unknown, signal: AbortSignal, onEvent: (e: E) => void): Promise<void> {
   const r = await fetch("/api/chat", { method: "POST", headers: { "content-type": "application/json" }, signal, body: JSON.stringify(body) });
-  if (!r.ok || !r.body) throw new Error(r.status === 429 ? "आज के लिए इतने सवाल काफ़ी हैं।" : "सर्वर से जवाब नहीं मिला।");
+  if (!r.ok || !r.body) {
+    const e = await readError(r);
+    throw new Error(e.code !== "error" ? e.message : r.status === 429 ? "आज के लिए इतने सवाल काफ़ी हैं।" : "सर्वर से जवाब नहीं मिला।");
+  }
   const reader = r.body.getReader();
   const dec = new TextDecoder();
   let buf = "";

@@ -4,9 +4,10 @@ Start: `uvicorn ai_teacher_api.server:root --port 8080` (the container does this
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException
 from starlette.types import Scope
 
 from ai_teacher_api.access import library
@@ -55,7 +56,7 @@ class Spa(StaticFiles):
         try:
             return await super().get_response(path, scope)
         except HTTPException as e:
-            if e.status_code == 404 and not path.startswith(("api/", "lessons/", "audio/", "img/")):
+            if e.status_code == 404 and "." not in path.rsplit("/", 1)[-1] and not path.startswith(("api/", "lessons/", "audio/", "img/")):
                 return FileResponse(DIST / "index.html")
             raise
 
