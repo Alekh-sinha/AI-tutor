@@ -15,7 +15,7 @@ photos, notes and questions appear and clear, like a human teacher. Details and 
 | later | Deploy pipeline to Agent Runtime behind Agent Gateway with VPC; more voices, avatar, languages, analytics | not started |
 
 Run the whole Phase 2 pipeline:
-`cd services/api && uv run python -m ai_teacher_api.pipeline ../../docs/source/fecu106.pdf ../../data/ch6 --book "NCERT Class 6 Science, Ch. 6"`
+`cd services/api && uv run python -m ai_teacher_api.pipeline path/to/chapter.pdf ../../data/ch6 --book "NCERT Class 6 Science, Ch. 6"`
 (resumable; `--lessons lesson-2` for one lesson; `--force` redoes everything). Player: `cd apps/web && npm run dev`, open `/`.
 
 Known limits of Phase 2 output: Hindi voice and photos are judged only by the two AI reviewers plus the owner's spot checks;

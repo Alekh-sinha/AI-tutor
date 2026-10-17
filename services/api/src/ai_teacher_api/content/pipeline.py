@@ -1,6 +1,6 @@
 """Chapter pipeline as an ADK Workflow: PDF -> parse -> plan -> (per lesson) script -> visuals -> audio+assemble.
 
-uv run python -m ai_teacher_api.pipeline ../../docs/source/fecu106.pdf ../../data/ch6 --book "NCERT Class 6 Science, Ch. 6"
+uv run python -m ai_teacher_api.pipeline path/to/chapter.pdf ../../data/ch6 --book "NCERT Class 6 Science, Ch. 6"
 
 Each stage is resumable: it is skipped when its output already exists (use --force to redo everything, or delete the
 stage's file). Lessons run one after another on purpose (parallel runs hit model quota). The output is a DRAFT: a

@@ -11,3 +11,9 @@ dist/
 logs/
 node_modules/
 services/api/.env
+
+# local-only material
+docs/source/
+.vscode/
+.DS_Store
+*.webm

@@ -5,7 +5,7 @@ import glob, json, os, sys, time
 from urllib.parse import quote
 from playwright.sync_api import sync_playwright
 
-BASE = os.environ["BASE"]; OUT = sys.argv[1]; PDF = sys.argv[2] if len(sys.argv) > 2 else "/home/alekh/Projects/ai-teacher/docs/source/fecu106.pdf"
+BASE = os.environ["BASE"]; OUT = sys.argv[1]; PDF = sys.argv[2] if len(sys.argv) > 2 else "docs/source/chapter.pdf"
 H = {"Authorization": "Bearer " + os.environ["AUTH_BEARER"]} if os.environ.get("AUTH_BEARER") else {}
 ADMIN, USER = "alekh.sinha09@gmail.com", f"maker{int(time.time()) % 100000}@example.com"
 CHROME = sorted(glob.glob(os.path.expanduser("~/.cache/ms-playwright/chromium-*/chrome-linux64/chrome")))[-1]
