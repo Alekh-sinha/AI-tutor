@@ -8,6 +8,7 @@ BASE = os.environ.get("BASE", "http://localhost:8002")
 OUT = sys.argv[1]
 ADMIN, USER = "alekh.sinha09@gmail.com", "teacher.one@example.com"
 CHROME = os.environ.get("CHROME") or sorted(glob.glob(os.path.expanduser("~/.cache/ms-playwright/chromium-*/chrome-linux64/chrome")))[-1]
+H = {"Authorization": "Bearer " + os.environ["AUTH_BEARER"]} if os.environ.get("AUTH_BEARER") else {}
 results, errors = [], []
 
 
@@ -24,7 +25,7 @@ def dev_login(ctx, email):
 with sync_playwright() as p:
     b = p.chromium.launch(executable_path=CHROME, headless=True, args=["--no-sandbox"])
     def new(email=None, w=1300, h=900):
-        ctx = b.new_context(viewport={"width": w, "height": h})
+        ctx = b.new_context(viewport={"width": w, "height": h}, extra_http_headers=H)
         if email:
             dev_login(ctx, email)
         pg = ctx.new_page()

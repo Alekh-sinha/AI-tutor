@@ -37,8 +37,8 @@ root = FastAPI(title="Seekho Saathi", docs_url=None, redoc_url=None, lifespan=li
 DIST = WEB_PUBLIC.parent / "dist"
 
 
-@root.get("/healthz")
-def healthz() -> dict:
+@root.get("/ping")
+def ping() -> dict:
     return {"status": "ok"}
 
 

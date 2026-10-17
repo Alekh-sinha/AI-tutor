@@ -8,6 +8,7 @@ from playwright.sync_api import sync_playwright
 BASE = os.environ.get("BASE", "http://localhost:8002"); OUT = sys.argv[1]; TOPIC = sys.argv[2] if len(sys.argv) > 2 else "पानी में नमक क्यों घुल जाता है?"
 ADMIN, USER = "alekh.sinha09@gmail.com", "host.teacher@example.com"
 CHROME = sorted(glob.glob(os.path.expanduser("~/.cache/ms-playwright/chromium-*/chrome-linux64/chrome")))[-1]
+H = {"Authorization": "Bearer " + os.environ["AUTH_BEARER"]} if os.environ.get("AUTH_BEARER") else {}
 res = []
 
 
@@ -17,8 +18,8 @@ def check(n, ok, d=""):
 
 with sync_playwright() as p:
     b = p.chromium.launch(executable_path=CHROME, headless=True, args=["--autoplay-policy=no-user-gesture-required", "--no-sandbox", "--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"])
-    adm = b.new_context(); adm.request.get(f"{BASE}/api/auth/dev", params={"email": ADMIN})
-    ctx = b.new_context(viewport={"width": 420, "height": 860}, permissions=["microphone"]); ctx.request.get(f"{BASE}/api/auth/dev", params={"email": USER})
+    adm = b.new_context(extra_http_headers=H); adm.request.get(f"{BASE}/api/auth/dev", params={"email": ADMIN})
+    ctx = b.new_context(viewport={"width": 420, "height": 860}, permissions=["microphone"], extra_http_headers=H); ctx.request.get(f"{BASE}/api/auth/dev", params={"email": USER})
     adm.request.post(f"{BASE}/api/admin/users/{quote(USER)}/grant", data={"usd": 5})
     pg = ctx.new_page(); errs = []; pg.on("pageerror", lambda e: errs.append(str(e)))
     pg.goto(f"{BASE}/live"); pg.wait_for_timeout(1500)

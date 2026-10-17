@@ -10,7 +10,7 @@ from ai_teacher_api.access.store import get_store
 
 ADMIN_EMAILS = {e.strip().lower() for e in os.environ.get("ADMIN_EMAILS", "alekh.sinha09@gmail.com").split(",") if e.strip()}
 START_CREDIT_USD = float(os.environ.get("START_CREDIT_USD", "10"))
-DAILY_CAP_USD = float(os.environ.get("DAILY_CAP_USD", "3"))
+DAILY_CAP_USD = float(os.environ.get("DAILY_CAP_USD", "5"))
 M = pricing.M
 
 
