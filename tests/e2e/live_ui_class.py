@@ -9,20 +9,20 @@ with sync_playwright() as p:
     b = p.chromium.launch(executable_path=CHROME, headless=True, args=["--autoplay-policy=no-user-gesture-required", "--no-sandbox"])
     pg = b.new_context(viewport={"width": 390, "height": 760}).new_page(); errs = []
     pg.on("pageerror", lambda e: errs.append(str(e)))
-    pg.goto(f"{WEB}/?room=new"); pg.fill(".lr-input", "गुरुजी"); pg.click("text=नई कक्षा बनाएँ"); pg.wait_for_selector(".lr-code b")
+    pg.goto(f"{WEB}/?room=new"); pg.fill(".lv-entry input", "गुरुजी"); pg.click("text=नई कक्षा बनाएँ"); pg.wait_for_selector(".lv-head .code")
     pg.fill("input[placeholder^='आज क्या']", TOPIC); pg.click("text=कक्षा शुरू करें")
     t0 = time.time(); last = None; n = 0; log = []; started = None
     while time.time() - t0 < SECONDS + 600:
-        sig = pg.evaluate("() => [...document.querySelectorAll('.lr-board .el')].map(e => e.className.split(' ').pop() + ':' + (e.innerText || '').slice(0, 30)).join('|')")
+        sig = pg.evaluate("() => [...document.querySelectorAll('.lv-bwrap .el')].map(e => e.className.split(' ').pop() + ':' + (e.innerText || '').slice(0, 30)).join('|')")
         if started is None and sig: started = time.time()  # the class has started when the first screen appears (planning is over)
         if sig and sig != last:
             time.sleep(1.2)  # let the entrance animation finish
             n += 1; last = sig
-            cap = pg.evaluate("() => (document.querySelector('.lr-caption')||{}).innerText || ''"); q = pg.evaluate("() => (document.querySelector('.lr-question')||{}).innerText || ''")
+            cap = pg.evaluate("() => (document.querySelector('.cap')||{}).innerText || ''"); q = pg.evaluate("() => (document.querySelector('.qban')||{}).innerText || ''")
             pg.screenshot(path=f"{OUT}/screen-{n:02d}.png")
-            clip = pg.evaluate("""() => { const b = document.querySelector('.lr-board .board'); if (!b) return null; const r = b.getBoundingClientRect(); return {boardH: Math.round(r.height), clipped: [...b.children].some(c => { const q = c.getBoundingClientRect(); return q.top < r.top - 2 || q.bottom > r.bottom + 2; })}; }""")
+            clip = pg.evaluate("""() => { const b = document.querySelector('.lv-bwrap .board'); if (!b) return null; const r = b.getBoundingClientRect(); return {boardH: Math.round(r.height), clipped: [...b.children].some(c => { const q = c.getBoundingClientRect(); return q.top < r.top - 2 || q.bottom > r.bottom + 2; })}; }""")
             log.append((n, round(time.time() - t0), sig, cap, q, clip)); print(f"[{n:02d}] t={round(time.time()-(started or t0))}s board={sig!r} clip={clip}\n     speaking: {cap!r} question: {q!r}", flush=True)
-        if pg.query_selector(".lr-done") and started and time.time() - started > 30: break
+        if pg.query_selector(".lv-done") and started and time.time() - started > 30: break
         if started and time.time() - started > SECONDS: break
         time.sleep(0.7)
     print("JS errors:", errs, "| screens:", n)

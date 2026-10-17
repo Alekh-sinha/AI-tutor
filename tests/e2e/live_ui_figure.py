@@ -8,13 +8,13 @@ with sync_playwright() as p:
     b = p.chromium.launch(executable_path=CHROME, headless=True, args=["--autoplay-policy=no-user-gesture-required", "--no-sandbox"])
     pg = b.new_context(viewport={"width": 420, "height": 860}).new_page(); errs = []
     pg.on("pageerror", lambda e: errs.append(str(e)))
-    pg.goto(f"{WEB}/?room=new"); pg.fill(".lr-input", "गुरुजी"); pg.click("text=नई कक्षा बनाएँ"); pg.wait_for_selector(".lr-code b")
+    pg.goto(f"{WEB}/?room=new"); pg.fill(".lv-entry input", "गुरुजी"); pg.click("text=नई कक्षा बनाएँ"); pg.wait_for_selector(".lv-head .code")
     pg.fill("input[placeholder^='आज क्या']", "घर्षण (friction)"); pg.click("text=कक्षा शुरू करें")
     t0 = time.time(); ok = False
     while time.time() - t0 < 420:
-        host = pg.query_selector(".lr-board .el-figure .figure-host")
+        host = pg.query_selector(".lv-bwrap .el-figure .figure-host")
         if host and pg.evaluate("h => !!h.shadowRoot && h.shadowRoot.querySelectorAll('div,span,p').length > 3", host): ok = True; break
         time.sleep(1)
     time.sleep(2); pg.screenshot(path=f"{OUT}/live-figure.png")
-    print("figure on the board with content in its shadow DOM:", ok, "| JS errors:", errs, "| elements:", len(pg.query_selector_all('.lr-board .el')))
+    print("figure on the board with content in its shadow DOM:", ok, "| JS errors:", errs, "| elements:", len(pg.query_selector_all('.lv-bwrap .el')))
     b.close()

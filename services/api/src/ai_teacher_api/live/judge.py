@@ -19,8 +19,8 @@ Decide strictly, using the notes, whether the child answered the question correc
 - partly: some of the idea is right but something essential is missing or mixed with a mistake.
 - wrong: it contradicts the facts, or answers something else.
 - unclear: empty, garbled, off-topic noise, or too little to judge. NEVER guess that unclear speech is correct.
-Then write `teacher_should_say`: ONE or TWO short simple Hindi sentences the teacher can say next, in the teacher's voice. correct: a brief confirmation of what exactly was right. partly: what was right, then a hint
-toward the missing part (do not give the whole answer yet). wrong: kindly say it is not quite right, give a hint or a simpler question, do not scold. unclear: ask the child to say it once more, a little slower."""
+Then write `teacher_should_say`: TWO or THREE short simple Hindi sentences the teacher can say next, in the teacher's voice. The question is NEVER asked again and no hint game is played. correct: a brief confirmation of exactly what was right. partly: say what was right, then give the full right answer and the reason behind it.
+wrong or unclear (including "I don't know", a yes/no to a why-question, or speech that could not be made out): kindly, without scolding, give the right answer and the reason behind it, so that the child learns it now."""
 
 
 class Verdict(BaseModel):

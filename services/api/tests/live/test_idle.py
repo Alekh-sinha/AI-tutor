@@ -58,3 +58,10 @@ def test_a_lost_release_or_a_cut_off_turn_does_not_stall_the_class():
     r.teacher_busy = True
     assert session.idle_action(r, _state(now, 3), now) is None  # she may still be thinking
     assert session.idle_action(r, _state(now, session.STALE_BUSY + 1), now) == "continue"
+
+
+def test_markup_and_check_only_patterns():
+    from ai_teacher_api.live import session
+    assert session.MARKUP.sub("", "ठीक है।</td>") == "ठीक है।"
+    assert session.MARKUP.sub("", "x<no speech>{pause}\n") == "x\n"
+    assert session.CHECK_ONLY.search("क्या यह समझ आया?") and not session.CHECK_ONLY.search("कौन सा बल रोकता है?")

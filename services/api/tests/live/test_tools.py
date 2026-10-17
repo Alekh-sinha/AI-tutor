@@ -40,3 +40,43 @@ def test_show_screen_rejects_unknown_names():
     assert asyncio.run(tools.show_screen(picture="nope"))["status"] == "error"
     assert asyncio.run(tools.show_screen(figure="f_nope"))["status"] == "error"
     assert asyncio.run(tools.show_screen())["status"] == "error"
+
+
+def test_a_failed_picture_or_figure_is_reported_to_the_teacher_and_not_counted(monkeypatch):
+    from ai_teacher_api.common import picturegen
+    from ai_teacher_api.live import figures
+    told = []
+
+    async def announce(room, text):
+        told.append(text)
+
+    async def bad_draw(*a, **k):
+        return {"status": "error", "error": "429 quota"}
+
+    async def bad_figure(client, description):
+        return "", ["labels overlap"]
+    monkeypatch.setattr(tools, "_announce", announce)
+    monkeypatch.setattr(picturegen, "draw", bad_draw)
+    monkeypatch.setattr(figures, "write_figure", bad_figure)
+
+    async def go():
+        room, _ = _setup()
+        await tools.draw_picture("a brake pad on a wheel rim", "ब्रेक")
+        await tools.draw_html("pad, rim, friction", "ब्रेक")
+        await asyncio.sleep(0.3)
+        return room
+
+    room = asyncio.run(go())
+    assert any("could NOT be drawn" in t and "draw_html" in t for t in told)
+    assert any("could NOT be made" in t for t in told)
+    assert room.drawn == 0 and room.figs_drawn == 0
+
+
+def test_show_screen_reply_says_what_the_item_really_shows():
+    room, turn = _setup()
+    room.catalog["p1"] = {"caption": "गेंद", "shows": "a ball stopping on mud"}
+    room.figures["f1"]["shows"] = "tyre grooves with water flowing out"
+    r = asyncio.run(tools.show_screen(heading="ब्रेक", picture="p1", figure="f1"))
+    assert any("a ball stopping on mud" in x for x in r["this_screen_shows"]) and any("tyre grooves" in x for x in r["this_screen_shows"])
+    assert r["your_heading"] == "ब्रेक" and "draw_html" in r["check"]
+    assert "check" not in asyncio.run(tools.show_screen(heading="सिर्फ़ शीर्षक"))  # a screen of words only has nothing to compare

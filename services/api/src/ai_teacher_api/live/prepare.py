@@ -5,7 +5,9 @@ what to point out; a picture that does not communicate is redrawn once; (5) the 
 Progress is sent to the children as `thinking` events."""
 
 import asyncio
+import hashlib
 import json
+import os
 import re
 import time
 
@@ -15,6 +17,7 @@ from pydantic import BaseModel, Field
 
 from ai_teacher_api.safety import gate, policy
 from ai_teacher_api.common import logsetup, picturegen
+from ai_teacher_api.common.paths import DATA_DIR
 from ai_teacher_api.common.settings import DEFAULT_TEXT_MODEL, PROJECT, TEXT_LOCATION, WEB_PUBLIC
 from ai_teacher_api.live import figures
 from ai_teacher_api.tutor import prep
@@ -227,6 +230,12 @@ async def prepare_topic(code: str, topic: str, progress) -> dict:
     if not verdict.ok:
         return {"refused": verdict.message_hi}
     topic = verdict.rewrite or topic  # a sensitive topic (puberty, reproduction) is taught as its textbook-level version
+    cache = DATA_DIR / "kits" / f"{hashlib.sha1(topic.encode()).hexdigest()[:12]}.json" if os.environ.get("KIT_CACHE") else None  # development only: the planning stage (3-6 minutes, image quota) is not repeated for a topic prepared before
+    if cache and cache.exists():
+        kit_saved = json.loads(cache.read_text())
+        if all((WEB_PUBLIC / v["src"].lstrip("/")).exists() for v in kit_saved["pictures"].values() if v["src"].startswith("/chat/")):
+            log.info("kit-from-cache", room=code, topic=topic[:80], pictures=len(kit_saved["pictures"]), figures=len(kit_saved["figures"]))
+            return kit_saved
     await progress("टीचर क्लास की तैयारी कर रही हैं…")
     r = await prep.prepare([types.Part(text=f"The children want to learn this: {topic}")], prep.recorded_lessons(), None, f"class-{code}")
     if r["refused"]:
@@ -247,4 +256,8 @@ async def prepare_topic(code: str, topic: str, progress) -> dict:
     for name, v in related_pictures(r["related"]).items():
         pics.setdefault(name, v)
     log.info("kit-ready", room=code, seconds=round(time.time() - t0), pictures=len(pics), figures=len(figs), dropped=len([s for s in kit.pictures if s.name not in pics]))
-    return {"notes": notes, "steps": kit.steps, "pictures": pics, "figures": figs, "catalog": catalog_text(pics, figs)}
+    result = {"notes": notes, "steps": kit.steps, "pictures": pics, "figures": figs, "catalog": catalog_text(pics, figs)}
+    if cache:
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        cache.write_text(json.dumps(result, ensure_ascii=False))
+    return result

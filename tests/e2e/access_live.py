@@ -24,13 +24,13 @@ with sync_playwright() as p:
     pg = ctx.new_page(); errs = []; pg.on("pageerror", lambda e: errs.append(str(e)))
     pg.goto(f"{BASE}/live"); pg.wait_for_timeout(1500)
     pg.fill("input[placeholder^='What should']", TOPIC); pg.click("button[aria-label='Start the class']")
-    pg.wait_for_selector(".lr-code b", timeout=20000)
-    check("host got a class code", len(pg.inner_text(".lr-code b")) == 5)
+    pg.wait_for_selector(".lv-head .code", timeout=20000)
+    check("host got a class code", len(pg.inner_text(".lv-head .code")) == 5)
     pg.screenshot(path=f"{OUT}/live-0-lobby.png")
     pg.click("text=कक्षा शुरू करें")
     t0 = time.time(); first = None
     while time.time() - t0 < 480:
-        if pg.query_selector(".lr-board .el") and first is None:
+        if pg.query_selector(".lv-bwrap .el") and first is None:
             first = time.time(); break
         time.sleep(1)
     check("the class started after planning (first screen on the board)", first is not None, f"{round(time.time() - t0)}s")
@@ -48,8 +48,8 @@ with sync_playwright() as p:
     ended = ""
     for _ in range(90):
         time.sleep(1)
-        if pg.query_selector(".lr-center h2"):
-            ended = pg.inner_text(".lr-center h2"); break
+        if pg.query_selector(".lv-center h2"):
+            ended = pg.inner_text(".lv-center h2"); break
     check("the class ended kindly when the limit was reached", "सीमा" in ended or "क्रेडिट" in ended, ended[:80])
     pg.screenshot(path=f"{OUT}/live-2-ended.png")
     check("no JavaScript errors", not errs, str(errs[:3]))

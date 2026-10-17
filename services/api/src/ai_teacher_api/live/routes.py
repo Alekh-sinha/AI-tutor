@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field
 from ai_teacher_api.access import auth, credits, usage
 from ai_teacher_api.common import logsetup
 from ai_teacher_api.common.settings import DEFAULT_VOICE
-from ai_teacher_api.live import prepare, prompt, session
+from ai_teacher_api.live import prepare, prompt, session, tools
 from ai_teacher_api.live.room import MAX_MEMBERS, ROOMS, Member, Room, new_room
 from ai_teacher_api.tutor import agent as tutor
 from ai_teacher_api.tutor import prep
@@ -83,7 +83,7 @@ async def _run(room: Room, topic: str) -> None:
                 await room.broadcast({"type": "ended", "reason": r["refused"]})
                 return
             room.figures = r["figures"]
-            room.catalog = {k: {"caption": v["caption"]} for k, v in r["pictures"].items()}
+            room.catalog = {k: {"caption": v["caption"], "shows": v.get("shows") or v.get("description", "")} for k, v in r["pictures"].items()}
             instruction = (prompt.TEACHER + "\n\n" + prompt.HAS_TOPIC + "\n\nCLASS NOTES:\n" + r["notes"] + "\n\nSUGGESTED STEPS: " + "; ".join(r["steps"]) + "\n\nCATALOG\n" + r["catalog"])
             pics = {k: v["src"] for k, v in r["pictures"].items()}
             first = f"आज बच्चे यह सीखना चाहते हैं: {topic.strip()[:200]}\n{prompt.START}"
@@ -139,14 +139,24 @@ async def ws(websocket: WebSocket, code: str, name: str = "", key: str = "") -> 
                 if room.live and room.mic_open(mid) and len(data) <= MAX_CHUNK:
                     audio_s += len(data) / 32000
                     room.in_audio_s += len(data) / 32000
-                    await room.live.send_realtime_input(audio=types.Blob(data=data, mime_type="audio/pcm;rate=16000"))
+                    if room.waiting:  # she is waiting for an answer (wait_for_answer): the server transcribes it, the speech model gets it as text
+                        if len(room.waiting["audio"]) < tools.MAX_ANSWER_AUDIO:
+                            room.waiting["audio"] += data
+                        room.last_child_audio = time.time()
+                    else:
+                        await room.live.send_realtime_input(audio=types.Blob(data=data, mime_type="audio/pcm;rate=16000"))
                 continue
             ev = json.loads(msg["text"]) if msg.get("text") else {}
             t = ev.get("type")
             if t == "start" and m.is_host and not room.started:
                 await _start(room, str(ev.get("topic", "")))
+            elif t == "continue" and m.is_host and room.live and room.waiting:  # she is waiting for an answer: "go on" ends the wait (the tool answer tells her), no new turn is started
+                room.waiting["skip"] = True
+                room.waiting["event"].set()
+                room.log_state("host-continue-ends-wait")
             elif t == "continue" and m.is_host and room.live:
                 room.teacher_busy = True
+                room.log_state("host-continue")
                 await room.live.send_client_content(turns=types.Content(role="user", parts=[types.Part(text=f"{room.board_status(room.live_pictures)}\n{prompt.HOST_CONTINUE}")]), turn_complete=True)
             elif t == "hand":
                 room.raise_hand(mid)
@@ -166,12 +176,15 @@ async def ws(websocket: WebSocket, code: str, name: str = "", key: str = "") -> 
                         room.talking.add(mid)
                         room.talk_started = time.time()
                         room.last_child_audio = time.time()
+                        if room.teacher_busy and not room.waiting:
+                            room.discard = True  # what she still has queued is dropped at once (while she waits for an answer nothing of hers is queued)
                         if room.teacher_busy:
-                            room.discard = True  # what she still has queued is dropped at once
                             await room.broadcast({"type": "interrupted"})
                         log.info("talk", room=code, member=mid, teacher_was_talking=room.teacher_busy)
+                        room.log_state("child-pressed-speak")
                 else:
                     room.talking.discard(mid)
+                    room.log_state("child-released-speak")
             elif t == "lower":
                 room.lower_hand(mid)
                 await room.broadcast(room.public_state())
@@ -180,19 +193,28 @@ async def ws(websocket: WebSocket, code: str, name: str = "", key: str = "") -> 
                     await room.live.send_realtime_input(audio_stream_end=True)
                 room.grant_next()
                 await room.broadcast(room.public_state())
-            elif t == "done" and room.release_floor(mid):
+            elif t == "done" and (room.release_floor(mid) or room.waiting):
                 room.talking.discard(mid)
-                if room.live:
+                if room.waiting:
+                    room.waiting["event"].set()  # the child finished their answer
+                elif room.live:
+                    room.owes_answer = time.time()
                     await room.live.send_realtime_input(audio_stream_end=True)  # lets the teacher answer without waiting for silence
                 log.info("floor-done", room=code, member=mid, audio_seconds=round(audio_s, 1))
+                room.log_state("child-done")
                 audio_s = 0.0
                 await room.broadcast(room.public_state())
             elif t == "text" and room.live and room.may_speak(mid):
                 room.talking.discard(mid)
-                room.heard += " " + str(ev.get("text", ""))[:400]
                 room.last_child_audio = time.time()
-                await room.live.send_realtime_input(text=str(ev.get("text", ""))[:400])
-                await room.broadcast({"type": "heard", "name": m.name, "delta": str(ev.get("text", ""))[:400] + " "})
+                if room.waiting:
+                    room.waiting["text"] += " " + str(ev.get("text", ""))[:400]
+                    room.waiting["event"].set()
+                else:
+                    room.heard += " " + str(ev.get("text", ""))[:400]
+                    room.owes_answer = time.time()
+                    await room.live.send_realtime_input(text=str(ev.get("text", ""))[:400])
+                    await room.broadcast({"type": "heard", "name": m.name, "delta": str(ev.get("text", ""))[:400] + " "})
     except WebSocketDisconnect:
         pass
     except Exception as e:  # noqa: BLE001

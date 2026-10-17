@@ -12,6 +12,10 @@ import secrets
 import time
 from dataclasses import dataclass, field
 
+from ai_teacher_api.common import logsetup
+
+log = logsetup.get("live")
+
 FLOOR_TIMEOUT = 25.0
 MAX_MEMBERS = 40
 MAX_ROOMS = 5
@@ -53,7 +57,13 @@ class Room:
     live_pictures: dict = field(default_factory=dict)  # picture name -> src of the running class (same dict as the teacher Turn's)
     last_question: dict | None = None  # the question closed last (answered, or hinted at): check_answer falls back to it
     catalog: dict = field(default_factory=dict)  # picture name -> {"caption"} (captions shown under pictures)
-    open_question: dict | None = None  # {"q", "expected", "hinted"}: set by the ask_question tool; the class waits for a child while it is open
+    open_question: dict | None = None  # {"q", "expected", "hinted"}: set while the class waits for a child (the wait_for_answer tool, or a question she asked without calling it)
+    waiting: dict | None = None  # {"audio", "text", "event", "skip"}: wait_for_answer is running; the child's microphone is collected here instead of being sent to the speech model
+    play_end: float = 0.0  # when the children have heard everything the teacher has said so far (the wait for an answer starts from here)
+    owes_answer: float = 0.0  # when a child last spoke or typed something she has not yet answered ALOUD (0 = nothing is owed): a turn of only tool calls does not settle it
+    ready_new: dict = field(default_factory=dict)  # visuals she asked for DURING the class that are ready and not yet shown: name -> times she was reminded
+    answer_nudges: int = 0  # how many times in a row she was told to answer aloud
+    _last_view: dict = field(default_factory=dict)
     figs_drawn: int = 0  # figures written DURING the class (the rare fallback tool draw_html)
     used: set = field(default_factory=set)  # names of prepared pictures / figures the teacher has shown so far
     drawn: int = 0  # pictures drawn DURING the class (the rare fallback tool draw_picture)
@@ -70,6 +80,20 @@ class Room:
         """What the teacher is told about the screen (live/boardstate.py)."""
         from ai_teacher_api.live import boardstate
         return boardstate.describe(self.board, pictures, self.figures, self.used)
+
+    # ------------------------------------------------------------ state log
+    def state_view(self) -> dict:
+        screen = [(e.get("name") or e.get("text") or e.get("type", ""))[:18] for e in self.board]
+        return {"busy": self.teacher_busy, "talking": sorted(self.talking), "floor": self.floor, "queue": len(self.queue), "question": (self.open_question or {}).get("q", "")[:50],
+                "waiting": bool(self.waiting), "finished": self.finished, "screen": screen}
+
+    def log_state(self, why: str, **extra) -> None:
+        """One log line for every change of the class state, with the reason: what changed [old, new] and why. Read logs/live.jsonl with `event == "state"` to follow a class."""
+        now, old = self.state_view(), self._last_view
+        changed = {k: [old.get(k), v] for k, v in now.items() if old.get(k) != v}
+        self._last_view = now
+        if changed or extra:
+            log.info("state", room=self.code, why=why, changed=changed, **extra)
 
     # ------------------------------------------------------------ members
     def add(self, m: Member) -> None:

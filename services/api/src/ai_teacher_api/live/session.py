@@ -2,7 +2,7 @@
 
 Data flow: children's microphones (16 kHz PCM, only the floor holder's, gated in room.py) -> `room.live.send_realtime_input` ; Live API -> audio chunks (24 kHz PCM, paced about in real time) broadcast to everyone, spoken-text
 transcripts (captions), tool calls (board/plan/pictures), `interrupted` (a child spoke over the teacher), `turn_complete` (floor handover). Tool calls run as background tasks so the receive loop never stalls; blocking
-tools (prepare_class, check_answer) make the model wait, the others are answered SILENT and she keeps talking. Logs: logs/live.jsonl."""
+tools (prepare_class, plan, wait_for_answer) make the model wait, the others are answered SILENT and she keeps talking. Logs: logs/live.jsonl."""
 
 import asyncio
 import re
@@ -20,11 +20,14 @@ from ai_teacher_api.tutor import agent as tutor
 
 log = logsetup.get("live")
 PRAISE = re.compile(r"(बिल्कुल|सही|शाबाश|वाह|बहुत अच्छे|अच्छा जवाब|ठीक कहा|तुमने ठीक)")
+MARKUP = re.compile(r"</?[A-Za-z][^>]{0,30}>|<no speech>|\{pause\}")  # the speech model's transcript sometimes carries markup ("</td>", "<no speech>{pause}", seen 2026-10-17): never shown to children
+CHECK_ONLY = re.compile(r"(समझ\s*(में)?\s*आया|समझ\s*गए|ठीक\s*है\s*\?|साफ़\s*हुआ|स्पष्ट\s*है|क्या\s*अब\s*समझ)")  # "was that clear?": a check on an explanation, not a question with a right answer
 SELF_ANSWER = re.compile(r"\?\s*(बिल्कुल|सही|शाबाश|वाह|ठीक कहा|तुमने)")
 CONTINUE_GAP = 0.8  # seconds of quiet after her speech has been played, before she is told to go on (no question was open)
 QUESTION_WAIT = 15.0  # seconds a question stays open for a child (push-to-talk or typing) before she hints or answers
 STALE_BUSY = 12.0  # seconds without any message from the model after which "she is busy" is no longer believed (a cut-off turn may never send turn_complete)
 STALE_TALK = 30.0  # seconds after which a "speak" press whose release message was lost is ignored
+MAX_ANSWER_NUDGES = 3  # times in a row she is told to answer aloud after a child spoke and she only used tools
 MAX_RECONNECTS = 3
 MAX_SESSION_SECONDS = 25 * 60
 
@@ -43,12 +46,12 @@ def build_config(client, instruction: str, voice: str, handle: str | None) -> ty
     return types.LiveConnectConfig(
         response_modalities=["AUDIO"],
         system_instruction=instruction,
-        speech_config=types.SpeechConfig(voice_config=types.VoiceConfig(prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=voice))),
+        speech_config=types.SpeechConfig(language_code="hi-IN", voice_config=types.VoiceConfig(prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=voice))),
         realtime_input_config=types.RealtimeInputConfig(automatic_activity_detection=types.AutomaticActivityDetection(
             start_of_speech_sensitivity=types.StartSensitivity.START_SENSITIVITY_LOW, end_of_speech_sensitivity=types.EndSensitivity.END_SENSITIVITY_LOW,
             prefix_padding_ms=200, silence_duration_ms=700)),  # less trigger-happy: a cough or a speaker's echo should not cut the teacher off
-        output_audio_transcription=types.AudioTranscriptionConfig(),
-        input_audio_transcription=types.AudioTranscriptionConfig(),
+        output_audio_transcription=types.AudioTranscriptionConfig(language_codes=["hi-IN"]),  # the captions come from a separate transcriber that picks a script per word: Hindi and Urdu sound alike, so without this it sometimes wrote a word in Urdu script (2026-10-17)
+        input_audio_transcription=types.AudioTranscriptionConfig(language_codes=["hi-IN"]),
         tools=[types.Tool(function_declarations=_declarations(client))],
         context_window_compression=types.ContextWindowCompressionConfig(sliding_window=types.SlidingWindow()),
         session_resumption=types.SessionResumptionConfig(handle=handle),
@@ -88,20 +91,26 @@ async def _run_tool(room: Room, turn: tutor.Turn, s, fc: types.FunctionCall, sta
     """Run one tool call in the background and answer it. Blocking tools: a plain answer (the model was waiting). The others: scheduling SILENT (she carries on talking and does not comment)."""
     fn = next((f for f in tools.TOOLS if f.__name__ == fc.name), None)
     t0 = time.time()
-    if fc.name == "check_answer":
+    if fc.name == "wait_for_answer":
         state["checked"] = True
+        state["waited"] = True  # this turn contains questions, waits and verdicts: a question followed by "सही!" is then normal
+    room.log_state(f"tool-{fc.name}-called", args=str(fc.args)[:200])
     try:
         result = await fn(**(fc.args or {})) if fn else {"status": "error", "error": "unknown tool"}
     except Exception as e:  # noqa: BLE001 - tell the model, keep the class going
         result = {"status": "error", "error": repr(e)[:200]}
         log.error("tool-failed", room=room.code, tool=fc.name, error=repr(e)[:300])
     result = {**result, "board_now": room.board_status(turn.lesson_pictures)}  # she cannot see the children's screen: every answer tells her what is on it
-    log.info("tool", room=room.code, tool=fc.name, args=fc.args, status=result.get("status"), seconds=round(time.time() - t0, 1), board_now=result["board_now"])
+    log.info("tool", room=room.code, tool=fc.name, args=fc.args, status=result.get("status"), seconds=round(time.time() - t0, 1), result=str({k: v for k, v in result.items() if k != "board_now"})[:500], board_now=result["board_now"])
     extra = {} if fc.name in tools.BLOCKING else {"scheduling": types.FunctionResponseScheduling.SILENT}
     try:
         await s.send_tool_response(function_responses=[types.FunctionResponse(id=fc.id, name=fc.name, response=result, **extra)])
     except Exception as e:  # noqa: BLE001 - the session may have ended meanwhile
         log.warn("tool-response-failed", room=room.code, tool=fc.name, error=repr(e)[:200])
+    if fc.name in tools.BLOCKING:  # the model now works on the answer: the idle watcher must not nudge her in the seconds before her first word (seen 2026-10-17: an auto-continue cut off the verdict of check_answer)
+        room.teacher_busy = True
+        state["last_msg"] = time.time()
+    room.log_state(f"tool-{fc.name}-answered")
 
 
 def idle_action(room: Room, state: dict, now: float) -> str | None:
@@ -112,6 +121,7 @@ def idle_action(room: Room, state: dict, now: float) -> str | None:
     quiet = now - max(state["last_msg"], state["play_end"])
     if room.teacher_busy and quiet > STALE_BUSY and state["pending_tools"] == 0:
         room.teacher_busy = False  # after a barge-in the interrupted turn may never be completed; seen as "stuck until आगे बढ़िए" on 2026-10-17
+        room.log_state("stale-busy-cleared", quiet=round(quiet, 1))
     if not (room.live and room.started and not room.finished and room.members and not room.teacher_busy and not room.talking and state["pending_tools"] == 0):
         return None
     child_quiet = now - room.last_child_audio
@@ -121,7 +131,7 @@ def idle_action(room: Room, state: dict, now: float) -> str | None:
 
 
 async def _watch_idle(room: Room, state: dict) -> None:
-    """She must never stall while nobody holds the microphone (see idle_action). After the hint the question is CLOSED (kept as room.last_question for a late answer): she hints, answers or re-asks with ask_question.
+    """She must never stall while nobody holds the microphone (see idle_action). After the hint the question is CLOSED (kept as room.last_question for a late answer): she hints, answers or re-asks and calls wait_for_answer again.
     Every nudge starts with the board status. No limit on the number of continues: a class ends with finish_class, the host leaving or the time cap."""
     while True:
         await asyncio.sleep(0.25)
@@ -140,6 +150,7 @@ async def _watch_idle(room: Room, state: dict) -> None:
         board = room.board_status(state["pictures"])
         log.info(kind, room=room.code, n=state["auto"], quiet=round(now - state["play_end"], 1), board=board)
         room.teacher_busy = True
+        room.log_state(f"idle-{kind}", quiet=round(now - max(state["last_msg"], state["play_end"]), 1))
         try:
             await room.live.send_client_content(turns=types.Content(role="user", parts=[types.Part(text=f"{board}\n{text}")]), turn_complete=True)
         except Exception as e:  # noqa: BLE001
@@ -159,7 +170,7 @@ async def _tell_board(room: Room, turn: tutor.Turn) -> None:
 
 
 async def _verify_answer(room: Room, state: dict, s, question: str, expected: str = "") -> None:
-    """Safety net for the speech model's habit of praising whatever a child says. When a child has answered and she starts replying WITHOUT having called check_answer, the answer is judged by a separate model
+    """Safety net for the speech model's habit of praising whatever a child says. When a child has answered and she starts replying WITHOUT having called wait_for_answer (the fallback when she asked a question and forgot the call), the answer is judged by a separate model
     in parallel; if it is not correct and she has already praised it, she is cut off and told to correct herself."""
     await asyncio.sleep(1.2)  # the transcript of the child's last words may still be arriving
     heard = room.heard.strip()
@@ -179,8 +190,7 @@ async def _verify_answer(room: Room, state: dict, s, question: str, expected: st
     await room.broadcast({"type": "interrupted"})
     if room.live:
         await room.live.send_client_content(turns=types.Content(role="user", parts=[types.Part(text=(
-            f"(STOP. The answer checker says the child's answer «{heard}» is {v['verdict'].upper()}: {v['reason']} You just praised it by mistake. Say kindly that it is not quite right, "
-            f"give a hint or a simpler question and ask again. Suggested words: {v['teacher_should_say']} Do not repeat what you said before.)"))]), turn_complete=True)
+            f"(STOP. The answer checker says the child's answer «{heard}» is {v['verdict'].upper()}: {v['reason']} You just praised it by mistake. Say kindly that it was not quite right and give the right answer with the reason behind it. Do not ask the question again. Suggested words: {v['teacher_should_say']})"))]), turn_complete=True)
 
 
 async def _handle(room: Room, turn: tutor.Turn, s, m: types.LiveServerMessage, state: dict) -> str | None:
@@ -188,6 +198,11 @@ async def _handle(room: Room, turn: tutor.Turn, s, m: types.LiveServerMessage, s
     state["last_msg"] = time.time()
     if m.session_resumption_update and m.session_resumption_update.new_handle:
         state["handle"] = m.session_resumption_update.new_handle
+    if m.tool_call_cancellation:
+        log.warn("tool-cancelled", room=room.code, ids=list(m.tool_call_cancellation.ids or []), waiting=bool(room.waiting))  # the server dropped a pending call (an interruption)
+        if room.waiting:
+            room.waiting["skip"] = True
+            room.waiting["event"].set()
     if m.go_away:
         log.warn("go-away", room=room.code, time_left=str(m.go_away.time_left))
         return "reconnect"
@@ -203,54 +218,53 @@ async def _handle(room: Room, turn: tutor.Turn, s, m: types.LiveServerMessage, s
         state["audio_bytes"] += len(m.data)
         room.out_audio_s += len(m.data) / 48000
         state["play_end"] = max(state["play_end"], time.time()) + len(m.data) / 48000  # 24 kHz 16-bit mono: when the children have heard everything sent so far
+        room.play_end = state["play_end"]
         await room.broadcast_bytes(m.data)
     sc = m.server_content
     if sc:
         if sc.output_transcription and sc.output_transcription.text and not room.discard:
-            state["said"] += sc.output_transcription.text
-            await room.broadcast({"type": "caption", "delta": sc.output_transcription.text})
+            delta = MARKUP.sub("", sc.output_transcription.text)
+            if delta != sc.output_transcription.text:
+                log.warn("markup-in-speech", room=room.code, text=sc.output_transcription.text[:80])
+            state["said"] += delta
+            if delta:
+                await room.broadcast({"type": "caption", "delta": delta})
         if sc.input_transcription and sc.input_transcription.text:
             room.last_child_audio = time.time()  # a child is really speaking (not just an open microphone)
             state["heard"] += sc.input_transcription.text
             room.heard += sc.input_transcription.text
+            if not room.waiting:
+                room.owes_answer = time.time()
             await room.broadcast({"type": "heard", "name": room.public_state()["floor_name"], "delta": sc.input_transcription.text})
         if sc.interrupted:
             log.info("interrupted", room=room.code, said=state["said"][-120:], since_nudge=round(time.time() - state["last_nudge"], 1), talking=bool(room.talking), since_child_audio=round(time.time() - room.last_child_audio, 1))
             room.discard = False
-            room.teacher_busy = False  # her turn was cut: whatever the child says next starts a new one, and if nothing follows the idle watcher takes over
+            room.teacher_busy = False
+            room.log_state("interrupted-by-child")  # her turn was cut: whatever the child says next starts a new one, and if nothing follows the idle watcher takes over
             state["auto"] = 0
             await room.broadcast({"type": "interrupted"})
         if sc.turn_complete:
             said = state["said"]
             log.info("teacher-turn", room=room.code, said=said, heard=state["heard"], seconds=round(time.time() - state["turn_t0"], 1),
                      audio_seconds=round(state["audio_bytes"] / 48000, 1), words=len(said.split()))  # words per audio second ~2.5-3.7 for Hindi; far above = sentences shown but not spoken
-            if SELF_ANSWER.search(said):
+            if re.search(r"[\u0600-\u06FF\u0750-\u077F]", said):
+                log.warn("wrong-script", room=room.code, said=said[:300])  # Arabic/Urdu script in her speech transcript (seen 2026-10-17: "فرکشن کے بارے میں")
+            if SELF_ANSWER.search(said) and not state.get("waited"):
                 log.warn("self-answer-suspect", room=room.code, said=said, heard=state["heard"])  # a question followed by "सही!" inside ONE turn: nobody answered
-            state["verifying"], state["checked"] = False, False
+            state["verifying"], state["checked"], state["waited"] = False, False, False
             state["tool_calls"] = 0
             if state["heard"].strip() and room.open_question:  # a child answered and she has replied: the question is done
                 room.last_question, room.open_question = room.open_question, None
                 await room.broadcast({"type": "question", "text": ""})
-            nudge_answer = bool((room.heard or state["heard"]).strip()) and not said.strip() and not state.get("answer_nudged")  # a child asked and her turn was only tool calls (the board changed, nothing was said)
-            state["answer_nudged"] = nudge_answer if not said.strip() else False
-            nudge_question = False
-            if room.open_question:
-                q = room.open_question
-                qwords = {w for w in re.findall(r"\w+", q["q"]) if len(w) > 2}
-                if not qwords or len(qwords & set(re.findall(r"\w+", said))) / len(qwords) >= 0.4:
-                    q["spoken"] = True
-                elif not q.get("spoken") and not q.get("nudged") and not state["heard"].strip():
-                    q["nudged"] = nudge_question = True  # the question is on the children's screen but she never said it aloud (a turn with only the tool call; seen 2026-10-17)
-                    log.warn("question-not-spoken", room=room.code, question=q["q"][:200], said=said[-160:])
-                tail = said[said.rfind("?") + 1:] if "?" in said else ""
-                if q.get("spoken") and len(tail.split()) >= 8:  # she kept talking after the question: she answered it herself, so nobody is being waited for
-                    log.warn("question-answered-by-teacher", room=room.code, question=q["q"][:200], after=tail[:160])
-                    room.last_question, room.open_question = q, None
-                    nudge_question = False
-                    await room.broadcast({"type": "question", "text": ""})
+            spoke = len(said.split()) >= 6
+            if spoke:
+                room.owes_answer, room.answer_nudges = 0.0, 0
+            nudge_answer = bool(room.owes_answer) and not spoke and not room.waiting and room.answer_nudges < MAX_ANSWER_NUDGES  # a child spoke and her turn was only tool calls: the board changed, nothing was said (seen 2026-10-17: two minutes of silence after a doubt, once the class had finished and no idle watcher ran)
+            if nudge_answer:
+                room.answer_nudges += 1
             if said.strip():
                 last_sentence = (re.findall(r"[^.?!।]+[.?!।]*", said.strip()) or [""])[-1].strip()
-                if last_sentence.endswith("?") and not room.open_question:  # she asked but forgot ask_question: still wait for the answer
+                if last_sentence.endswith("?") and not room.open_question and not CHECK_ONLY.search(last_sentence):  # she asked but did not call wait_for_answer: nobody is collecting the answer, so a child's voice goes straight to her (she may mis-hear or praise it); the idle watcher hints after QUESTION_WAIT
                     room.open_question = {"q": last_sentence[:300], "expected": "", "hinted": False}
                     log.warn("question-without-tool", room=room.code, question=last_sentence[:200])
                 state["turns"] += 1
@@ -263,16 +277,20 @@ async def _handle(room: Room, turn: tutor.Turn, s, m: types.LiveServerMessage, s
             turn.new_pictures = 0
             await room.broadcast({"type": "caption_end"})
             await _hand_over(room)
+            room.log_state("teacher-turn-complete", words=len(said.split()))
             await _tell_board(room, turn)
-            if nudge_answer and room.live and not nudge_question:
-                log.warn("child-asked-no-speech", room=room.code)
+            reminder = next((n for n, c in room.ready_new.items() if c < 2), None) if (room.finished or room.owes_answer) and not nudge_answer and not room.waiting else None  # a visual she asked for is ready and not on the screen
+            if reminder and room.live:
+                room.ready_new[reminder] += 1
+                log.warn("ready-visual-not-shown", room=room.code, name=reminder, reminded=room.ready_new[reminder])
+                room.teacher_busy = True
+                state["last_msg"] = time.time()
+                await room.live.send_client_content(turns=types.Content(role="user", parts=[types.Part(text=prompt.SHOW_READY.format(name=reminder))]), turn_complete=True)
+            if nudge_answer and room.live:
+                log.warn("child-asked-no-speech", room=room.code, attempt=room.answer_nudges)
                 room.teacher_busy = True
                 state["last_msg"] = time.time()
                 await room.live.send_client_content(turns=types.Content(role="user", parts=[types.Part(text=prompt.ANSWER_ALOUD)]), turn_complete=True)
-            if nudge_question and room.live and room.open_question:
-                room.teacher_busy = True
-                state["last_msg"] = time.time()
-                await room.live.send_client_content(turns=types.Content(role="user", parts=[types.Part(text=prompt.SAY_QUESTION.format(q=room.open_question["q"]))]), turn_complete=True)
     if m.tool_call:
         for fc in m.tool_call.function_calls:
             state["pending_tools"] += 1
