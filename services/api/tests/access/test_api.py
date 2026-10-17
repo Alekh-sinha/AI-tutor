@@ -56,11 +56,13 @@ def test_new_user_waits_for_approval_then_gets_credit(env):
     c = client(env, "kid@example.com")
     me = c.get("/me").json()
     assert me["status"] == "pending" and me["balance_usd"] == 0
+    assert [x["type"] for x in me["open_requests"]] == ["access"]  # the request was sent automatically at sign-in
+    assert me["contact_email"] == "alekh.sinha09@gmail.com"
     r = c.post("/chat", json={"message": "hi"})
     assert r.status_code == 403 and r.json()["detail"]["code"] == "not_approved"
     assert "9:00 PM IST" in r.json()["detail"]["message"]
     sent = c.post("/access/request", json={"note": "I am a teacher"}).json()
-    assert sent["status"] == "sent" and "9:00 PM IST" in sent["message"]
+    assert sent["status"] == "already_open" and "9:00 PM IST" in sent["message"]
     assert c.post("/access/request", json={}).json()["status"] == "already_open"  # no duplicate
     # not an admin: cannot see the dashboard
     assert c.get("/admin/overview").status_code in (403, 401)

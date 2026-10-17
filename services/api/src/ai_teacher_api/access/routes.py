@@ -13,13 +13,14 @@ from ai_teacher_api.common import logsetup
 
 log = logsetup.get("app")
 router = APIRouter()
+CONTACT_EMAIL = os.environ.get("CONTACT_EMAIL", "alekh.sinha09@gmail.com")  # shown to users whose approval takes long
 REVIEW_NOTE = "Requests are reviewed every day after 9:00 PM IST. You will see the result here, and you can keep watching the free lessons meanwhile."
 REVIEW_NOTE_HI = "अनुरोध रोज़ रात 9:00 बजे (IST) के बाद देखे जाते हैं। नतीजा यहीं दिखेगा, तब तक मुफ़्त पाठ देखते रहिए।"
 
 
 @router.get("/auth/config")
 def auth_config() -> dict:
-    return {"auth_mode": auth.mode(), "google_client_id": auth.GOOGLE_CLIENT_ID, "dev_login": os.environ.get("AUTH_DEV_LOGIN") == "1", "review_note": REVIEW_NOTE, "review_note_hi": REVIEW_NOTE_HI}
+    return {"auth_mode": auth.mode(), "google_client_id": auth.GOOGLE_CLIENT_ID, "dev_login": os.environ.get("AUTH_DEV_LOGIN") == "1", "review_note": REVIEW_NOTE, "review_note_hi": REVIEW_NOTE_HI, "contact_email": CONTACT_EMAIL}
 
 
 class GoogleIn(BaseModel):
@@ -32,6 +33,8 @@ def auth_google(body: GoogleIn, request: Request, response: Response) -> dict:
     u = credits.login(claims["email"], claims.get("name", ""), claims.get("picture", ""))
     auth.set_cookie(response, request, u["email"])
     log.info("login", email=u["email"], status=u["status"], count=u["login_count"])
+    if u["status"] != "active":
+        _open_request(u["email"], "access", "Sent automatically when signing in")  # a new user need not find a button: the request is with the admin from the first sign-in
     return credits.view(u)
 
 
@@ -41,6 +44,8 @@ def auth_dev(email: str, request: Request, response: Response) -> dict:
         raise HTTPException(404)
     u = credits.login(email, email.split("@")[0])
     auth.set_cookie(response, request, u["email"])
+    if u["status"] != "active":
+        _open_request(u["email"], "access", "Sent automatically when signing in")
     return credits.view(u)
 
 
@@ -56,7 +61,7 @@ async def me(u: dict | None = Depends(auth.optional_user)) -> dict:
     if u is None:
         return {"signed_in": False}
     out = {"signed_in": True, **credits.view(u), "open_requests": [{"id": r["id"], "type": r["type"], "created": r["created"]} for r in get_store().query("requests", {"email": u["email"], "status": "open"})]}
-    out["review_note"], out["review_note_hi"] = REVIEW_NOTE, REVIEW_NOTE_HI
+    out["review_note"], out["review_note_hi"], out["contact_email"] = REVIEW_NOTE, REVIEW_NOTE_HI, CONTACT_EMAIL
     decided = [r for st in ("approved", "rejected") for r in get_store().query("requests", {"email": u["email"], "status": st}, limit=5)]
     decided.sort(key=lambda r: r.get("decided") or 0, reverse=True)
     out["recent_decisions"] = [{"type": r["type"], "status": r["status"], "usd": round(r.get("amount_micro", 0) / credits.M, 2), "decided": r["decided"]} for r in decided[:3]]
