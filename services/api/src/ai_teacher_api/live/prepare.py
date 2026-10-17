@@ -193,18 +193,31 @@ async def refine_pictures(code: str, specs: list[PicSpec], pics: dict[str, dict]
 
 
 def catalog_text(pics: dict[str, dict], figs: dict[str, dict]) -> str:
-    """The teacher's catalog: what each picture / figure REALLY shows and what it is for (she cannot see them)."""
-    lines = ["PICTURES (name — what it really shows | idea it carries | what to point out):"]
+    """The teacher's catalog: what each picture / figure REALLY shows, what idea it carries, what to point out and the step it was made for (she cannot see them; information only, she decides what to use)."""
+    lines = ["PICTURES (name — what it really shows | idea it carries | what to point out | made for step):"]
     for k, v in pics.items():
-        lines.append(f"- {k} — {v.get('shows') or v.get('description') or v['caption']} | idea: {v.get('intent', '')} | point out: {v.get('point_out', '')}" if v.get("intent") else f"- {k} — {v['caption']} (for: {v['step']})")
+        if v.get("intent"):
+            lines.append(f"- {k} — {v.get('shows') or v.get('description') or v['caption']} | idea: {v['intent']} | point out: {v.get('point_out', '')} | step: {v.get('step', '')}")
+        else:
+            lines.append(f"- {k} — {v['caption']} (a picture from a recorded lesson on a related topic)")
     if not pics:
         lines.append("- none")
-    lines.append("FIGURES (name — what it contains | idea it carries):")
+    lines.append("FIGURES (HTML boards; name — what a child sees | idea it carries | helps when | what to point out | made for step):")
     for k, v in figs.items():
-        lines.append(f"- {k} — {v.get('description', v['caption'])} | idea: {v.get('intent', '')}")
+        lines.append(f"- {k} — {v.get('shows') or v.get('description', v['caption'])} | idea: {v.get('intent', '')} | helps when: {v.get('helps_when', '')} | point out: {v.get('point_out', '')} | step: {v.get('step', '')}")
     if not figs:
         lines.append("- none")
     return "\n".join(lines)
+
+
+def related_pictures(lesson_ids: list[str], limit: int = 6) -> dict[str, dict]:
+    """Pictures of recorded lessons on a related topic, ONLY those that have a caption (an item she cannot understand from its entry only adds noise to the catalog; seen 2026-10-17: 27 of them with empty entries)."""
+    out: dict[str, dict] = {}
+    for lid in lesson_ids:
+        for e in prep.load_lesson(lid)["events"]:
+            if e["type"] == "image" and "~" not in e["id"] and (e.get("text") or e.get("caption")) and len(out) < limit:
+                out[f"{lid}/{e['id']}"] = {"src": e["src"], "caption": (e.get("text") or e.get("caption"))[:40], "step": "related recorded lesson"}
+    return out
 
 
 async def prepare_topic(code: str, topic: str, progress) -> dict:
@@ -231,7 +244,7 @@ async def prepare_topic(code: str, topic: str, progress) -> dict:
         log.warn("picture-dropped", room=code, name=name, shows=pics[name].get("shows", "")[:200])
         pics.pop(name)
     # pictures of related recorded lessons are available too
-    for name, src in prep.pictures_of(r["related"]).items():
-        pics.setdefault(name, {"src": src, "caption": "", "step": "related recorded lesson"})
+    for name, v in related_pictures(r["related"]).items():
+        pics.setdefault(name, v)
     log.info("kit-ready", room=code, seconds=round(time.time() - t0), pictures=len(pics), figures=len(figs), dropped=len([s for s in kit.pictures if s.name not in pics]))
     return {"notes": notes, "steps": kit.steps, "pictures": pics, "figures": figs, "catalog": catalog_text(pics, figs)}

@@ -1,7 +1,7 @@
 """Tools of the live teacher (called by the Gemini Live model, gemini-3.8-live). The board is ONE SCREEN AT A TIME: `show_screen` replaces everything on it (a heading, one picture or figure from the catalog, a few notes), so old and new never mix.
 `ask_question` tells the system that a question is open and the class must wait for a child; `check_answer` judges the answer. They act on the room's `Turn` (a ContextVar set by session.py) and push events that session.py forwards to every child.
 Calling convention (session.py): `prepare_class`, `plan` and `check_answer` are BLOCKING (the model waits for the result); all the others are NON_BLOCKING and answered with scheduling SILENT, so the teacher keeps talking while the screen changes.
-Pictures and figures are made in the planning stage (live/prepare.py); `draw_picture` and `draw_html` are RARE FALLBACKS for a child's question the catalog does not cover: they add to the catalog (she is told when it is ready) and she then shows it with show_screen."""
+Pictures and figures are made in the planning stage (live/prepare.py); `draw_picture` and `draw_html` make a NEW picture or figure when the prepared catalog does not show what a child's question or the idea needs: they add to the catalog (she is told when it is ready) and she then shows it with show_screen."""
 
 import asyncio
 import time
@@ -25,12 +25,12 @@ def _room():
 
 async def show_screen(heading: str = "", picture: str = "", figure: str = "", notes: list[str] | None = None) -> dict:
     """Put a NEW screen on the board: it REPLACES everything that was there. Call it at the moment you start talking about what it shows (a teacher writes or shows first, then explains), never after you have finished explaining it.
-    Combine what belongs together in ONE call (for example the heading, the picture and two key words); anything you leave out disappears.
+    Put together in ONE call whatever belongs on this screen (any mix of a heading, a picture, a figure and key words that suits the idea); anything you leave out disappears.
 
     Args:
         heading: optional title of the screen, at most 6 Hindi words.
         picture: optional name of ONE picture from the catalog.
-        figure: optional name of ONE figure from the catalog (a picture and a figure together are allowed but crowd the screen).
+        figure: optional name of ONE figure from the catalog (an HTML board: labelled parts, steps, a comparison or table, a scale, cause and effect). A picture and a figure together are allowed when the idea needs both, but they share a small screen.
         notes: optional key words or short lines to write (at most 4, each at most 6 words, Hindi); the concepts you want the children to remember.
     """
     turn, room = _room()
@@ -106,8 +106,8 @@ async def _announce(room, text: str) -> None:
 
 
 async def draw_picture(description: str, caption: str = "") -> dict:
-    """RARE FALLBACK: draw a NEW illustration, only when a child asks about something that no catalog picture covers and a picture would really help. It takes up to a minute: say in one sentence that you are drawing it and carry on.
-    You are told when it is ready; then show it with show_screen. At most 3 per class. Describe ONE frozen moment in which the idea is visible (who or what is doing what, with its visible effect), never text or arrows.
+    """Draw a NEW illustration when no catalog picture shows what you need (typically a child's doubt about something the prepared material does not cover) and seeing it would help more than words. It takes up to a minute to be drawn,
+    so say aloud that you are drawing it and keep explaining in words; you are told when it is ready, then show it with show_screen. A class has room for 3 of these. Describe ONE frozen moment in which the idea is visible (who or what is doing what, with its visible effect), never text or arrows.
 
     Args:
         description: concrete English description of the scene, at most 40 words.
@@ -137,8 +137,8 @@ async def draw_picture(description: str, caption: str = "") -> dict:
 
 
 async def draw_html(description: str, caption: str = "") -> dict:
-    """RARE FALLBACK: write a NEW figure (a labelled diagram, table, scale, cause -> effect boxes, small animation), only when a child asks about something no catalog figure covers. It takes some seconds: say in one sentence that you are
-    drawing it and carry on. You are told when it is ready; then show it with show_screen. At most 3 per class.
+    """Write a NEW figure (a labelled diagram, table, scale, cause -> effect boxes, steps in order, small animation) when no catalog figure shows what you need and a figure would make it clearer than a picture or words. It takes 15-30 seconds,
+    so say aloud that you are drawing it and keep explaining in words; you are told when it is ready, then show it with show_screen. A class has room for 3 of these.
 
     Args:
         description: English instruction to the figure writer: which Hindi labels to show and how they are arranged (3-6 elements), at most 70 words. No drawings of objects or people, no diagonal lines.

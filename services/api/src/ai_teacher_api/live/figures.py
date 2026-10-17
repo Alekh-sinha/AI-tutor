@@ -3,12 +3,14 @@ voice model while she speaks), checked in code, and pulled by the teacher with s
 Spike 2026-10-16 (tests/e2e/html_spike_*.py): 5 of 6 figures looked right at 360 px (arrows, tables, scales, before/after, CSS animation); objects drawn from emoji look crude, so objects stay photos."""
 
 import asyncio
+import json
 import re
 import time
 from html.parser import HTMLParser
 
 from google import genai
 from google.genai import types
+from pydantic import BaseModel
 
 from ai_teacher_api.safety import policy
 from ai_teacher_api.common import logsetup
@@ -84,6 +86,25 @@ async def write_figure(client, description: str) -> tuple[str, list[str]]:
     return html, problems
 
 
+DESCRIBER = """You look at the HTML of ONE classroom figure that is kept in a teacher's catalog. The teacher cannot see it, she only reads your description before deciding whether it helps the idea she is about to explain.
+- `shows`: what a child SEES, in 2 plain English sentences (the layout, which Hindi words or numbers are where, what is highlighted or moves).
+- `helps_when`: one sentence: which kind of explanation or question this figure helps with (what it makes clear that words alone or a photo cannot).
+- `point_out`: 1-2 short things to draw the children's attention to, taken from what is really in the figure."""
+
+
+class FigureNote(BaseModel):
+    shows: str
+    helps_when: str
+    point_out: str = ""
+
+
+async def describe_figure(client, html: str, intent: str) -> FigureNote:
+    r = await client.aio.models.generate_content(
+        model=DEFAULT_TEXT_MODEL, contents=f"INTENT IT WAS MADE FOR: {intent}\n\nHTML:\n{html}",
+        config=types.GenerateContentConfig(system_instruction=DESCRIBER, response_mime_type="application/json", response_schema=FigureNote, temperature=0.1))
+    return FigureNote.model_validate(json.loads(r.text))
+
+
 async def make_figures(code: str, specs, progress) -> dict[str, dict]:
     """Write all planned figures in parallel (text model: no image quota). Returns {name: {"html", "caption", "step"}} of those that passed the checks."""
     if not specs:
@@ -102,7 +123,12 @@ async def make_figures(code: str, specs, progress) -> dict[str, dict]:
         log.info("class-figure", room=code, name=s.name, ok=not problems, problems=problems, chars=len(html), seconds=round(time.time() - t0, 1), description=s.description[:160])
         done += 1
         if not problems:
-            out[s.name] = {"html": html, "caption": s.caption, "step": s.step, "intent": s.intent, "description": s.description}
+            note = {"shows": s.description, "helps_when": s.intent, "point_out": ""}  # used if the describer fails: the build instruction is better than nothing
+            try:
+                note = (await describe_figure(client, html, s.intent)).model_dump()
+            except Exception as e:  # noqa: BLE001
+                log.warn("figure-describe-failed", room=code, name=s.name, error=repr(e)[:200])
+            out[s.name] = {"html": html, "caption": s.caption, "step": s.step, "intent": s.intent, "description": s.description, **note}
         await progress(f"चित्र और आकृतियाँ बन रही हैं… {done}/{len(specs)}")
 
     await asyncio.gather(*(one(s) for s in specs))

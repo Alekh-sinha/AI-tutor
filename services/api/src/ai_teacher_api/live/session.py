@@ -231,6 +231,8 @@ async def _handle(room: Room, turn: tutor.Turn, s, m: types.LiveServerMessage, s
             if state["heard"].strip() and room.open_question:  # a child answered and she has replied: the question is done
                 room.last_question, room.open_question = room.open_question, None
                 await room.broadcast({"type": "question", "text": ""})
+            nudge_answer = bool((room.heard or state["heard"]).strip()) and not said.strip() and not state.get("answer_nudged")  # a child asked and her turn was only tool calls (the board changed, nothing was said)
+            state["answer_nudged"] = nudge_answer if not said.strip() else False
             nudge_question = False
             if room.open_question:
                 q = room.open_question
@@ -262,6 +264,11 @@ async def _handle(room: Room, turn: tutor.Turn, s, m: types.LiveServerMessage, s
             await room.broadcast({"type": "caption_end"})
             await _hand_over(room)
             await _tell_board(room, turn)
+            if nudge_answer and room.live and not nudge_question:
+                log.warn("child-asked-no-speech", room=room.code)
+                room.teacher_busy = True
+                state["last_msg"] = time.time()
+                await room.live.send_client_content(turns=types.Content(role="user", parts=[types.Part(text=prompt.ANSWER_ALOUD)]), turn_complete=True)
             if nudge_question and room.live and room.open_question:
                 room.teacher_busy = True
                 state["last_msg"] = time.time()
