@@ -47,6 +47,7 @@ class Room:
     finished: bool = False  # the class is over (recap + home activity done): free conversation, no more steps
     picture_caps: dict = field(default_factory=dict)  # lesson picture name -> caption, for the board assistant
     notes: str = ""  # class notes / lesson text the answer judge checks against
+    talk_started: float = 0.0  # when the last 'speak' press began (a lost 'done' message must not block the class for ever)
     talking: set = field(default_factory=set)  # children who pressed "speak": ONLY their microphone is heard (push-to-talk: background noise and side talk never reach the teacher)
     figures: dict = field(default_factory=dict)  # HTML figures made in the planning stage: name -> {html, caption, step} (show_figure)
     live_pictures: dict = field(default_factory=dict)  # picture name -> src of the running class (same dict as the teacher Turn's)

@@ -23,6 +23,8 @@ PRAISE = re.compile(r"(बिल्कुल|सही|शाबाश|वाह
 SELF_ANSWER = re.compile(r"\?\s*(बिल्कुल|सही|शाबाश|वाह|ठीक कहा|तुमने)")
 CONTINUE_GAP = 0.8  # seconds of quiet after her speech has been played, before she is told to go on (no question was open)
 QUESTION_WAIT = 15.0  # seconds a question stays open for a child (push-to-talk or typing) before she hints or answers
+STALE_BUSY = 12.0  # seconds without any message from the model after which "she is busy" is no longer believed (a cut-off turn may never send turn_complete)
+STALE_TALK = 30.0  # seconds after which a "speak" press whose release message was lost is ignored
 MAX_RECONNECTS = 3
 MAX_SESSION_SECONDS = 25 * 60
 
@@ -105,9 +107,13 @@ async def _run_tool(room: Room, turn: tutor.Turn, s, fc: types.FunctionCall, sta
 def idle_action(room: Room, state: dict, now: float) -> str | None:
     """What the idle watcher should do now: "continue" (no question is open, she is quiet), "hint" (a question has been open QUESTION_WAIT with no answer: she is told once to hint or answer and go on), or None.
     Pure function of the room and the state (unit-tested: a question that stayed open after the hint once stalled the whole class)."""
+    if room.talking and now - room.talk_started > STALE_TALK:
+        room.talking.clear()  # the finger slid off the button or the release was lost: the class must not wait for ever
+    quiet = now - max(state["last_msg"], state["play_end"])
+    if room.teacher_busy and quiet > STALE_BUSY and state["pending_tools"] == 0:
+        room.teacher_busy = False  # after a barge-in the interrupted turn may never be completed; seen as "stuck until आगे बढ़िए" on 2026-10-17
     if not (room.live and room.started and not room.finished and room.members and not room.teacher_busy and not room.talking and state["pending_tools"] == 0):
         return None
-    quiet = now - max(state["last_msg"], state["play_end"])
     child_quiet = now - room.last_child_audio
     if room.open_question:
         return "hint" if quiet >= QUESTION_WAIT and child_quiet >= QUESTION_WAIT else None
@@ -127,7 +133,7 @@ async def _watch_idle(room: Room, state: dict) -> None:
             text, kind = prompt.NO_ANSWER, "no-answer-hint"
             room.last_question, room.open_question = room.open_question, None
         else:
-            text, kind = prompt.AUTO_CONTINUE, "auto-continue"
+            text, kind = (prompt.DEEPEN if state["auto"] % 2 == 1 else prompt.AUTO_CONTINUE), "auto-continue"  # every second nudge asks her to stay with the idea: a class of four ideas was over in two minutes
         state["auto"] += 1
         state["last_msg"] = now
         state["last_nudge"] = now
@@ -211,6 +217,7 @@ async def _handle(room: Room, turn: tutor.Turn, s, m: types.LiveServerMessage, s
         if sc.interrupted:
             log.info("interrupted", room=room.code, said=state["said"][-120:], since_nudge=round(time.time() - state["last_nudge"], 1), talking=bool(room.talking), since_child_audio=round(time.time() - room.last_child_audio, 1))
             room.discard = False
+            room.teacher_busy = False  # her turn was cut: whatever the child says next starts a new one, and if nothing follows the idle watcher takes over
             state["auto"] = 0
             await room.broadcast({"type": "interrupted"})
         if sc.turn_complete:
@@ -224,6 +231,21 @@ async def _handle(room: Room, turn: tutor.Turn, s, m: types.LiveServerMessage, s
             if state["heard"].strip() and room.open_question:  # a child answered and she has replied: the question is done
                 room.last_question, room.open_question = room.open_question, None
                 await room.broadcast({"type": "question", "text": ""})
+            nudge_question = False
+            if room.open_question:
+                q = room.open_question
+                qwords = {w for w in re.findall(r"\w+", q["q"]) if len(w) > 2}
+                if not qwords or len(qwords & set(re.findall(r"\w+", said))) / len(qwords) >= 0.4:
+                    q["spoken"] = True
+                elif not q.get("spoken") and not q.get("nudged") and not state["heard"].strip():
+                    q["nudged"] = nudge_question = True  # the question is on the children's screen but she never said it aloud (a turn with only the tool call; seen 2026-10-17)
+                    log.warn("question-not-spoken", room=room.code, question=q["q"][:200], said=said[-160:])
+                tail = said[said.rfind("?") + 1:] if "?" in said else ""
+                if q.get("spoken") and len(tail.split()) >= 8:  # she kept talking after the question: she answered it herself, so nobody is being waited for
+                    log.warn("question-answered-by-teacher", room=room.code, question=q["q"][:200], after=tail[:160])
+                    room.last_question, room.open_question = q, None
+                    nudge_question = False
+                    await room.broadcast({"type": "question", "text": ""})
             if said.strip():
                 last_sentence = (re.findall(r"[^.?!।]+[.?!।]*", said.strip()) or [""])[-1].strip()
                 if last_sentence.endswith("?") and not room.open_question:  # she asked but forgot ask_question: still wait for the answer
@@ -240,6 +262,10 @@ async def _handle(room: Room, turn: tutor.Turn, s, m: types.LiveServerMessage, s
             await room.broadcast({"type": "caption_end"})
             await _hand_over(room)
             await _tell_board(room, turn)
+            if nudge_question and room.live and room.open_question:
+                room.teacher_busy = True
+                state["last_msg"] = time.time()
+                await room.live.send_client_content(turns=types.Content(role="user", parts=[types.Part(text=prompt.SAY_QUESTION.format(q=room.open_question["q"]))]), turn_complete=True)
     if m.tool_call:
         for fc in m.tool_call.function_calls:
             state["pending_tools"] += 1

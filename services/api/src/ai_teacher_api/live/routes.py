@@ -164,6 +164,7 @@ async def ws(websocket: WebSocket, code: str, name: str = "", key: str = "") -> 
                         await websocket.send_json({"type": "busy"})  # somebody else is speaking: wait for them to finish
                     else:
                         room.talking.add(mid)
+                        room.talk_started = time.time()
                         room.last_child_audio = time.time()
                         if room.teacher_busy:
                             room.discard = True  # what she still has queued is dropped at once

@@ -20,8 +20,8 @@ from ai_teacher_api.live import figures
 from ai_teacher_api.tutor import prep
 
 log = logsetup.get("live")
-MAX_PICTURES = 5
-PICTURES_RANGE = (4, 6)
+MAX_PICTURES = 7
+PICTURES_RANGE = (5, 8)
 FIGURES_RANGE = (6, 9)
 MAX_FIGURES = 8
 PREP_BUDGET_S = 600  # the children wait at most this long for the pictures (the user accepted up to 10 minutes)
@@ -36,7 +36,7 @@ PLANNER = """You are the resource maker for a teacher who is about to teach a LI
 Children understand best when what they SEE tells the same story as what they HEAR. Your job is to supply the pictures and figures the teacher will put on that board, from the class notes.
 Make:
 - `steps`: 3-5 class steps, each a short Hindi phrase, in teaching order.
-- `pictures`: 5 ILLUSTRATIONS (some may be rejected later, so make each one count). Each must carry its idea BY ITSELF: a child who looks at it without hearing a word can tell what is happening and why it matters. For every picture first decide its `intent`: the one thing a child should understand from it.
+- `pictures`: 7 ILLUSTRATIONS (some may be rejected later, so make each one count; at least one per class step, two for the steps that carry the most). Each must carry its idea BY ITSELF: a child who looks at it without hearing a word can tell what is happening and why it matters. For every picture first decide its `intent`: the one thing a child should understand from it.
   Then describe ONE frozen moment in which that idea is visible: the people or things DOING the thing, with the cause and its visible effect in the same frame (effort shown in the body, a mark or change left behind, a before and an after side by side in one image).
   A picture of objects that merely stand there says nothing: never do that. Everyday Bihar setting, few elements, bold and clear. Never ask for text, labels, numbers or arrows inside a picture. `description`: concrete English, at most 40 words.
 - `figures`: 7 or 8 HTML FIGURES for what a picture cannot show: named parts with labels, a comparison as a table, a scale or number line, cause -> effect in 2-3 boxes, steps in order, a quantity as blocks, a small animation of a change. Each is ONE simple board figure (3-6 elements, a few Hindi words) with its own `intent`.
@@ -74,7 +74,7 @@ def kit_problems(k: KitPlan) -> list[str]:
     if not 3 <= len(k.steps) <= 6:
         p.append(f"{len(k.steps)} steps (need 3-5)")
     if not PICTURES_RANGE[0] <= len(k.pictures) <= PICTURES_RANGE[1]:
-        p.append(f"{len(k.pictures)} pictures (need about 5)")
+        p.append(f"{len(k.pictures)} pictures (need about 7)")
     if not FIGURES_RANGE[0] <= len(k.figures) <= FIGURES_RANGE[1]:
         p.append(f"{len(k.figures)} figures (need 7 or 8)")
     covered = {s.step for s in k.pictures + k.figures}
@@ -157,6 +157,12 @@ async def check_picture(client, path, spec: PicSpec, description: str) -> Pictur
     return PictureCheck.model_validate(json.loads(r.text))
 
 
+def unusable(c: PictureCheck) -> bool:
+    """A picture is thrown away only when it is unsafe, has text/letters or deformed hands, faces or objects. One that merely tells a slightly different story than planned is KEPT: the teacher's catalog says what it really shows
+    (2026-10-17: two of five pictures were dropped for being 'not exactly the intent' although they were fine, and the class had almost no illustrations)."""
+    return any(k in " ".join(c.problems).lower() for k in ("unsafe", "text", "letter", "number", "deform", "nude", "gore", "weapon"))
+
+
 async def refine_pictures(code: str, specs: list[PicSpec], pics: dict[str, dict], progress) -> None:
     """A vision model looks at every drawn picture (what it really shows, does it carry its intent); one that does not is redrawn once from the checker's better description. Fills `shows`, `point_out`, `communicates` into `pics`."""
     if not pics:
@@ -177,7 +183,7 @@ async def refine_pictures(code: str, specs: list[PicSpec], pics: dict[str, dict]
                     pics[name]["description"] = c.better_description
                     c = await check_picture(client, path, spec, c.better_description)
                     log.info("picture-check", room=code, name=name, communicates=c.communicates, shows=c.shows[:200], problems=c.problems, after_redraw=True)
-            pics[name].update({"shows": c.shows, "point_out": c.point_out, "communicates": c.communicates})
+            pics[name].update({"shows": c.shows, "point_out": c.point_out, "communicates": c.communicates or not unusable(c)})
         except Exception as e:  # noqa: BLE001 - the unchecked picture is still usable: she gets the description it was drawn from
             log.warn("picture-check-failed", room=code, name=name, error=repr(e)[:200])
             pics[name].update({"shows": pics[name]["description"], "point_out": "", "communicates": True})

@@ -8,6 +8,7 @@ repairs ran, and (when asked) the agent's own explanation.
 """
 
 import json
+import os
 import threading
 import time
 from pathlib import Path
@@ -47,8 +48,10 @@ class FeatureLog:
                     f.write(line + "\n")
         except OSError:
             pass  # logging must never break the work
-        if level != "info":
+        if level != "info" and not os.environ.get("K_SERVICE"):
             print(f"[{self.feature}] {level.upper()} {event} {json.dumps(_clip(fields), ensure_ascii=False)[:300]}", flush=True)
+        if os.environ.get("K_SERVICE"):  # Cloud Run: the container disk is lost, so every event also goes to the platform log (searchable with textPayload:"[live]")
+            print(f"[{self.feature}] {level.upper()} {event} {json.dumps(_clip(fields), ensure_ascii=False)[:700]}", flush=True)
 
     def info(self, event: str, **fields) -> None:
         self._write("info", event, fields)

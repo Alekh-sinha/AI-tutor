@@ -26,7 +26,7 @@ def _spec(name, step):
 
 def test_kit_counts_and_coverage_are_checked():
     steps = ["a", "b", "c"]
-    pics = [_spec(f"p{i}", steps[i % 3]) for i in range(4)]
+    pics = [_spec(f"p{i}", steps[i % 3]) for i in range(7)]
     figs = [_spec(f"f{i}", steps[i % 3]) for i in range(7)]
     assert prepare.kit_problems(prepare.KitPlan(steps=steps, pictures=pics, figures=figs)) == []
     assert any("figures" in p for p in prepare.kit_problems(prepare.KitPlan(steps=steps, pictures=pics, figures=figs[:3])))

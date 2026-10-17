@@ -38,6 +38,7 @@ def test_after_the_hint_the_class_goes_on_not_stalls():
 def test_never_while_a_child_talks_a_tool_runs_or_the_class_is_finished():
     r, now = _room(), time.time()
     r.talking.add("a")
+    r.talk_started = now
     assert session.idle_action(r, _state(now, 30), now) is None
     r.talking.clear()
     st = _state(now, 30)
@@ -45,3 +46,15 @@ def test_never_while_a_child_talks_a_tool_runs_or_the_class_is_finished():
     assert session.idle_action(r, st, now) is None
     r.finished = True
     assert session.idle_action(r, _state(now, 30), now) is None
+
+
+def test_a_lost_release_or_a_cut_off_turn_does_not_stall_the_class():
+    """Regression 2026-10-17: after a child's doubt she stayed silent until the host pressed आगे बढ़िए (busy flag / speak flag never cleared)."""
+    r, now = _room(), time.time()
+    r.talking.add("a")
+    r.talk_started = now - session.STALE_TALK - 1
+    assert session.idle_action(r, _state(now, 30), now) == "continue"
+    assert not r.talking
+    r.teacher_busy = True
+    assert session.idle_action(r, _state(now, 3), now) is None  # she may still be thinking
+    assert session.idle_action(r, _state(now, session.STALE_BUSY + 1), now) == "continue"
