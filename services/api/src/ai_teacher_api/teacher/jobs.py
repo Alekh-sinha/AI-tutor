@@ -9,7 +9,7 @@ import uuid
 from collections.abc import Callable
 
 from ai_teacher_api.access import usage
-from ai_teacher_api.common import logsetup, workspace
+from ai_teacher_api.common import logsetup, persist, workspace
 
 log = logsetup.get("content")
 JOBS: dict[str, dict] = {}
@@ -38,6 +38,7 @@ def start(kind: str, label: str, fn: Callable[[Callable[[str], None]], dict], ne
         finally:
             if needs_images:
                 workspace.release()  # before the status flips, so a client that sees "done" can start the next job
+        persist.sync_now()  # the finished files reach the bucket before the job reports done
         job.update(result=result, error=error, ended=time.time(), status=status)
         if status == "done":
             log.info("job-done", job=jid, seconds=round(time.time() - job["started"]), result=result)

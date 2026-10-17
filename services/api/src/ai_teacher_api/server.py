@@ -2,6 +2,8 @@
 and everything else is the built web app (apps/web/dist) with index.html as the fallback for client-side pages.
 Start: `uvicorn ai_teacher_api.server:root --port 8080` (the container does this). Development keeps using `uvicorn ai_teacher_api.app:app` + Vite."""
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -9,9 +11,21 @@ from starlette.types import Scope
 
 from ai_teacher_api.access import library
 from ai_teacher_api.app import app as api
+from ai_teacher_api.common import persist
 from ai_teacher_api.common.settings import WEB_PUBLIC
 
-root = FastAPI(title="Seekho Saathi", docs_url=None, redoc_url=None)
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    """With DATA_BUCKET set: restore the files from the bucket before serving, push changes while running and once more on shutdown."""
+    import asyncio
+
+    if persist.configure():
+        await asyncio.to_thread(persist.start)
+    yield
+    await asyncio.to_thread(persist.stop)
+
+
+root = FastAPI(title="Seekho Saathi", docs_url=None, redoc_url=None, lifespan=lifespan)
 DIST = WEB_PUBLIC.parent / "dist"
 
 

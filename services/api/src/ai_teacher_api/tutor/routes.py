@@ -17,7 +17,7 @@ from google.genai import types
 from pydantic import BaseModel, Field
 
 from ai_teacher_api.access import auth, library
-from ai_teacher_api.common import logsetup
+from ai_teacher_api.common import logsetup, sse
 from ai_teacher_api.common.paths import DATA_DIR, split_public_id
 from ai_teacher_api.common.settings import DEFAULT_VOICE, WEB_PUBLIC
 from ai_teacher_api.content.brief import LessonBrief, render
@@ -172,11 +172,8 @@ async def chat(body: ChatIn, u: dict = Depends(auth.active_user)) -> StreamingRe
 
     async def stream():
         try:
-            while True:
-                ev = await asyncio.wait_for(turn.queue.get(), timeout=400)
-                yield f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
-                if ev["type"] == "done":
-                    break
+            async for chunk in sse.events(turn.queue, 400):
+                yield chunk
         finally:
             task.cancel()
 

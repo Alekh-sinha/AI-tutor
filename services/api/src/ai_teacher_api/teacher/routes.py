@@ -35,7 +35,7 @@ from ai_teacher_api.common.settings import DEFAULT_TEXT_MODEL, DEFAULT_VOICE, WE
 from ai_teacher_api.content.brief import LessonBrief, render
 from ai_teacher_api.director import run_direct
 from ai_teacher_api.safety import gate
-from ai_teacher_api.teacher import jobs
+from ai_teacher_api.teacher import jobs, publishing
 from ai_teacher_api.teacher.agent import ASKED, build_teacher_editor
 
 log = logsetup.get("teacher")
@@ -102,6 +102,11 @@ def _pending(d: Path) -> list[str]:
     return sorted(p.name for p in (d / "proposals").glob("*") if (p / "lecture.md").exists()) if (d / "proposals").exists() else []
 
 
+def _script_json(chapter: str, pid: str) -> str | None:
+    f = chapter_dir(chapter) / f"directed-{pid}.json"
+    return f.read_text() if f.exists() else None
+
+
 def _view(lesson: str, chapter: str) -> dict:
     d = _dir(lesson, chapter)
     md = (d / "lecture.md").read_text()
@@ -111,6 +116,7 @@ def _view(lesson: str, chapter: str) -> dict:
         "checks": lecture_checks(md, d, _concepts(lesson, chapter)),
         "versions": _versions(d), "pending": _pending(d), "published": (WEB_PUBLIC / "lessons" / f"{public_id(chapter, lesson)}.json").exists(),
         "public_id": public_id(chapter, lesson),
+        "publish": publishing.status(chapter_dir(chapter), public_id(chapter, lesson), md, _script_json(chapter, public_id(chapter, lesson))),
     }
 
 
@@ -341,11 +347,8 @@ async def edit(lesson: str, body: EditIn, chapter: str = DEFAULT_CHAPTER) -> Str
 
     async def stream():
         try:
-            while True:
-                ev = await asyncio.wait_for(q.get(), timeout=600)
-                yield f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
-                if ev["type"] == "done":
-                    break
+            async for chunk in sse.events(q, 600):
+                yield chunk
         finally:
             if not task.done():
                 task.cancel()
@@ -428,6 +431,7 @@ async def publish(lesson: str, body: PublishIn, chapter: str = DEFAULT_CHAPTER) 
     if problems:
         raise HTTPException(409, {"checks": problems})
     pid = public_id(chapter, lesson)
+    d_chapter = chapter_dir(chapter)
     key = f"{chapter}/{lesson}"
     if _publish.get(key, {}).get("status") == "running":
         raise HTTPException(409, "already publishing")
@@ -438,6 +442,7 @@ async def publish(lesson: str, body: PublishIn, chapter: str = DEFAULT_CHAPTER) 
         try:
             res = await asyncio.to_thread(run_direct.run, chapter_dir(chapter), lesson, DEFAULT_TEXT_MODEL, DEFAULT_VOICE, d, pid, True, True)
             run_direct.register(pid, json.loads((WEB_PUBLIC / "lessons" / f"{pid}.json").read_text())["title"], res.get("duration", 0), "published")
+            publishing.mark_published(d_chapter, pid, (d / "lecture.md").read_text(), (d_chapter / f"directed-{pid}.json").read_text())
             _publish[key] = {"status": "done", "public_id": pid, "left_for_teacher": res["for_teacher"]}
             log.info("publish-done", chapter=chapter, lesson=lesson, public_id=pid, left=res["for_teacher"])
         except Exception as ex:  # noqa: BLE001

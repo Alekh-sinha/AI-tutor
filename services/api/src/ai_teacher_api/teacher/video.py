@@ -21,13 +21,13 @@ from google.adk.sessions import InMemorySessionService
 from google.genai import types
 from pydantic import BaseModel, Field
 
-from ai_teacher_api.common import logsetup
+from ai_teacher_api.common import logsetup, sse
 from ai_teacher_api.common.paths import DEFAULT_CHAPTER, chapter_dir, public_id
-from ai_teacher_api.common.settings import DEFAULT_VOICE, resolve_model
+from ai_teacher_api.common.settings import DEFAULT_VOICE, WEB_PUBLIC, resolve_model
 from ai_teacher_api.director import run_direct
 from ai_teacher_api.director.agent import Directed
 from ai_teacher_api.director.script import BoardCue
-from ai_teacher_api.teacher import jobs
+from ai_teacher_api.teacher import jobs, publishing
 from ai_teacher_api.teacher.agent import ASKED, ask_teacher
 from ai_teacher_api.teacher.routes import auth
 
@@ -205,11 +205,12 @@ def _rebuild(lesson: str, chapter: str) -> dict:
     d, pid, saved, _, _ = _paths(lesson, chapter)
     src = d / "illustrated" / f"{lesson}-final"
     directed = Directed.model_validate_json(saved.read_text())
+    out_id = publishing.build_id(d, pid)  # a published lesson is edited as a hidden draft; students keep the live version until "Publish changes"
 
     def work(progress) -> dict:
         t0 = time.time()
         progress("recording the voice and assembling the video")
-        r = run_direct.produce(d, lesson, pid, src, directed, (src / "lecture.md").read_text(), DEFAULT_VOICE)
+        r = run_direct.produce(d, lesson, out_id, src, directed, (src / "lecture.md").read_text(), DEFAULT_VOICE)
         log.info("video-rebuild", chapter=chapter, lesson=lesson, seconds=round(time.time() - t0), **r)
         return r
 
@@ -220,8 +221,10 @@ def _rebuild(lesson: str, chapter: str) -> dict:
 @router.get("", dependencies=[Depends(auth)])
 def view(lesson: str, chapter: str = DEFAULT_CHAPTER) -> dict:
     directed = _load(lesson, chapter)
-    _, pid, _, vdir, pdir = _paths(lesson, chapter)
-    return {"public_id": pid, "lines": storyboard(directed), "checks": _checks(lesson, chapter, directed),
+    d, pid, saved, vdir, pdir = _paths(lesson, chapter)
+    lecture = (d / "illustrated" / f"{lesson}-final" / "lecture.md").read_text()
+    pub = publishing.status(d, pid, lecture, saved.read_text())
+    return {"public_id": pid, "draft_id": publishing.draft_id(pid), "publish": pub, "lines": storyboard(directed), "checks": _checks(lesson, chapter, directed),
             "versions": sorted(int(p.stem[1:]) for p in vdir.glob("v*.json")) if vdir.exists() else [], "pending": sorted(p.stem for p in pdir.glob("*.json")) if pdir.exists() else []}
 
 
@@ -300,11 +303,8 @@ async def edit(lesson: str, body: VideoEditIn, chapter: str = DEFAULT_CHAPTER) -
 
     async def stream():
         try:
-            while True:
-                ev = await asyncio.wait_for(q.get(), timeout=300)
-                yield f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
-                if ev["type"] == "done":
-                    break
+            async for chunk in sse.events(q, 300):
+                yield chunk
         finally:
             if not task.done():
                 task.cancel()
@@ -337,6 +337,38 @@ def reject(lesson: str, pid: str, chapter: str = DEFAULT_CHAPTER) -> dict:
     _, _, _, _, pdir = _paths(lesson, chapter)
     (pdir / f"{re.sub(r'[^a-f0-9]', '', pid)}.json").unlink(missing_ok=True)
     return {"status": "rejected"}
+
+
+@router.post("/publish-draft", dependencies=[Depends(auth)])
+def publish_draft(lesson: str, chapter: str = DEFAULT_CHAPTER) -> dict:
+    """"Publish changes" for video edits of a live lesson: the built draft replaces the live video."""
+    d, pid, saved, _, pdir = _paths(lesson, chapter)
+    if not publishing.is_live(d, pid):
+        raise HTTPException(409, "this lesson is not published yet: use Publish")
+    if pdir.exists() and list(pdir.glob("*.json")):
+        raise HTTPException(409, "accept or reject the pending change first")
+    if jobs.running(f"{chapter}/{lesson} video"):
+        raise HTTPException(409, "the video is still being built; try again in a minute")
+    try:
+        publishing.publish_draft(d, pid)
+    except FileNotFoundError as e:
+        raise HTTPException(409, str(e)) from e
+    new = publishing.mark_video_published(d, pid, saved.read_text())
+    run_direct.register(pid, json.loads((WEB_PUBLIC / "lessons" / f"{pid}.json").read_text())["title"], 0, "published")
+    log.info("video-publish-draft", chapter=chapter, lesson=lesson, version=new["version"])
+    return {"status": "published", "version": new["version"]}
+
+
+@router.post("/discard-draft", dependencies=[Depends(auth)])
+def discard_draft(lesson: str, chapter: str = DEFAULT_CHAPTER) -> dict:
+    d, pid, _, _, pdir = _paths(lesson, chapter)
+    if not publishing.is_live(d, pid):
+        raise HTTPException(409, "nothing is published, so there is no draft to discard")
+    publishing.discard_draft(d, pid)
+    if pdir.exists():
+        shutil.rmtree(pdir, ignore_errors=True)
+    log.info("video-discard-draft", chapter=chapter, lesson=lesson)
+    return {"status": "discarded"}
 
 
 @router.post("/undo", dependencies=[Depends(auth)])
