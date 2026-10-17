@@ -36,13 +36,14 @@ export async function stream(path: string, body: unknown, onEvent: (e: Record<st
 
 export interface View {
   lesson: string; markdown: string; base_url: string; pictures: { name: string; description: string }[];
-  checks: string[]; versions: number[]; pending: string[]; published: boolean;
+  checks: string[]; versions: number[]; pending: string[]; published: boolean; public_id: string;
+  publish: { live: boolean; version: number; lecture_changed: boolean; video_changed: boolean; draft_ready: boolean };
 }
 export interface Proposal {
   id: string; reply: string; diff: { before: string; after: string }[]; changed_pictures: string[]; wide: boolean; base_url: string; checks: string[];
 }
 
-export interface ChapterInfo { id: string; book: string; lessons: { id: string; title: string; has_lecture: boolean; has_video: boolean; public_id: string; pending: number }[] }
+export interface ChapterInfo { id: string; book: string; lessons: { id: string; title: string; has_lecture: boolean; has_video: boolean; public_id: string; pending: number; live: boolean; version: number; draft: boolean; lecture_changed: boolean; video_changed: boolean }[] }
 export interface Job { id: string; status: "running" | "done" | "failed"; stage: string; elapsed: number; error: string; label: string; result: Record<string, unknown> | null }
 
 export async function uploadChapter(chapterId: string, book: string, pdf: File): Promise<Job> {

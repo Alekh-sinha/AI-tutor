@@ -134,8 +134,11 @@ def chapters() -> list[dict]:
         for l in plan["lessons"]:
             f = p.parent / "illustrated" / f"{l['id']}-final"
             pid = public_id(c, l["id"])
-            lessons.append({"id": l["id"], "title": l["title"], "has_lecture": (f / "lecture.md").exists(), "has_video": (WEB_PUBLIC / "lessons" / f"{pid}.json").exists(),
-                            "public_id": pid, "pending": len(_pending(f)) if f.exists() else 0})
+            has_lecture = (f / "lecture.md").exists()
+            pub = publishing.status(p.parent, pid, (f / "lecture.md").read_text() if has_lecture else "", _script_json(c, pid)) if has_lecture else {"live": False, "version": 0, "lecture_changed": False, "video_changed": False, "draft_ready": False}
+            lessons.append({"id": l["id"], "title": l["title"], "has_lecture": has_lecture, "has_video": (WEB_PUBLIC / "lessons" / f"{pid}.json").exists(),
+                            "public_id": pid, "pending": len(_pending(f)) if f.exists() else 0, "live": pub["live"], "version": pub["version"],
+                            "draft": pub["lecture_changed"] or pub["video_changed"], "lecture_changed": pub["lecture_changed"], "video_changed": pub["video_changed"]})
         out.append({"id": c, "book": plan.get("book", c), "lessons": lessons})
     return out
 

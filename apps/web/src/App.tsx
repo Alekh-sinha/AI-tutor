@@ -1,123 +1,59 @@
 import "./live/live.css";
-import { useEffect, useRef, useState } from "react";
+import "./App.css";
+import "./ui.css";
+import { useEffect, useState, type ReactNode } from "react";
 import type { Lesson } from "../../../packages/lesson-schema/lesson";
-import { Board } from "./player/Board";
-import { boardAt, captionAt, thinkingAt } from "./player/board";
 import { ChatPanel } from "./chat/ChatPanel";
 import { LiveClass } from "./chat/LiveClass";
 import { LiveEntry } from "./live/LiveEntry";
-import { Teacher } from "./teacher/Teacher";
-import { Ended } from "./player/Ended";
-import { ThinkClock } from "./player/ThinkClock";
-import { usePlayer } from "./player/usePlayer";
-import "./App.css";
+import { Admin } from "./pages/Admin";
+import { Home } from "./pages/Home";
+import { Lessons } from "./pages/Lessons";
+import { LivePage } from "./pages/LivePage";
+import { Player } from "./pages/Player";
+import { AccessDialog, Shell, type NavKey } from "./ss/Shell";
+import { watchAccessErrors } from "./ss/api";
+import { MeProvider, SignIn } from "./ss/auth";
+import { TeacherDashboard } from "./teacher/Dashboard";
 
-function Player({ lesson }: { lesson: Lesson }) {
-  const { time, playing, toggle, seek } = usePlayer(lesson);
-  const think = thinkingAt(lesson, time);
-  const ended = time >= lesson.duration && !playing && !!lesson.activity;
-  const [asking, setAsking] = useState(false);
-  const live = new URLSearchParams(location.search).has("live");
-  const timeRef = useRef(time);
-  timeRef.current = time;
-  return (
-    <div className="player">
-      <div className="topbar">
-        <a className="back" href="/" aria-label="सभी पाठ">←</a>
-        <h1 className="lesson-title">{lesson.title}</h1>
-      </div>
-      {ended ? (
-        <div className="board"><Ended activity={lesson.activity} onReplay={() => { seek(0); toggle(); }} /></div>
-      ) : (
-        <Board state={boardAt(lesson, time)} time={time} />
-      )}
-      {think ? <ThinkClock {...think} /> : <p className="caption">{captionAt(lesson, time)}</p>}
-      <div className="controls">
-        <button onClick={toggle} aria-label={playing ? "रोकें" : "चलाएँ"}>
-          {playing ? "⏸" : "▶"}
-        </button>
-        <input
-          type="range"
-          min={0}
-          max={lesson.duration}
-          step={0.1}
-          value={time}
-          style={{ "--p": `${(time / Math.max(1, lesson.duration)) * 100}%` } as React.CSSProperties}
-          onChange={(e) => seek(Number(e.target.value))}
-        />
-        <button className="ask-open" onClick={() => { if (playing) toggle(); setAsking(true); }}>❓ सवाल पूछें</button>
-      </div>
-      {asking && <ChatPanel lessonId={lesson.id} getTime={() => timeRef.current} onClose={() => setAsking(false)} />}
-      {live && !asking && <LiveClass lessonId={lesson.id} getTime={() => timeRef.current} onClose={() => { location.href = "/"; }} />}
-    </div>
-  );
+/** Full-screen experiences (live room, chat) keep their own layout but share the sign-in context and the "credit used up" dialog. */
+function FullScreen({ children }: { children: ReactNode }) {
+  useEffect(() => watchAccessErrors(), []);
+  return <div className="ss">{children}<AccessDialog /></div>;
 }
 
-interface IndexEntry { id: string; title: string; duration: number; status: string }
-
-const splitTitle = (t: string) => {
-  const [name, tag = ""] = t.split(" · ");
-  return { name, tag };
-};
-const TILES = ["🧪", "🔬", "🌱", "⚗️", "💡", "🧲"];
-
-function LessonList() {
-  const [items, setItems] = useState<IndexEntry[] | null>(null);
+function LessonPage({ id }: { id: string }) {
+  const [lesson, setLesson] = useState<Lesson | null>(null);
+  const [err, setErr] = useState<{ status: number; text: string } | null>(null);
   useEffect(() => {
-    fetch("/lessons/index.json").then((r) => r.json()).then(setItems).catch(() => setItems([]));
-  }, []);
-  return (
-    <div className="home">
-      <header className="hero">
-        <div className="hero-lamp">🪔</div>
-        <h1>नमस्ते! आज क्या सीखेंगे?</h1>
-        <p>टीचर से बोलकर, लिखकर या फोटो भेजकर पूछिए</p>
-      </header>
-      <div className="home-actions">
-        <a className="action a1" href="/?chat=1"><span className="ico">💬</span><span><b>टीचर से बात करें</b><small>कोई भी सवाल पूछिए</small></span></a>
-        <a className="action a2" href="/?room=new"><span className="ico">🎓</span><span><b>लाइव क्लास</b><small>बोलकर सीखिए</small></span></a>
-        <a className="action a3" href="/?join=1"><span className="ico">🔑</span><span><b>कक्षा में जुड़ें</b><small>कोड से दोस्तों के साथ</small></span></a>
-      </div>
-      <h2 className="section">📚 पाठ</h2>
-      {!items ? <p className="empty">लोड हो रहा है…</p> : (
-        <div className="lesson-list">
-          {items.map((l, i) => {
-            const { name, tag } = splitTitle(l.title);
-            return (
-              <div key={l.id} className="lesson-card">
-                <span className="lesson-tile" aria-hidden>{TILES[i % TILES.length]}</span>
-                <a href={`/?lesson=${l.id}`} className="lesson-link">
-                  <b>{name}</b>
-                  <span className="chips">
-                    <span className="chip">⏱ {Math.round(l.duration / 60)} मिनट</span>
-                    {tag.startsWith("v2") && <span className="chip v2">नया v2</span>}
-                    {tag.startsWith("v1") && <span className="chip old">पुराना v1</span>}
-                    {l.status === "draft" && <span className="chip draft">समीक्षा बाकी</span>}
-                  </span>
-                </a>
-                <a className="live-link" href={`/?room=new&lesson=${l.id}`}>🎓 लाइव</a>
-              </div>
-            );
-          })}
-          {items.length === 0 && <p className="empty">अभी कोई पाठ नहीं है।</p>}
-        </div>
-      )}
-    </div>
-  );
+    fetch(`/lessons/${id}.json`).then(async (r) => {
+      if (r.ok) setLesson(await r.json());
+      else setErr({ status: r.status, text: (await r.json().catch(() => null))?.detail?.message ?? "This lesson could not be opened." });
+    }).catch(() => setErr({ status: 0, text: "Could not reach the server." }));
+  }, [id]);
+  if (err) return <div className="card gate"><h2>{err.status === 401 ? "Please sign in" : "Can't open this lesson"}</h2><p className="sub">{err.text}</p>{err.status === 401 && <SignIn />}</div>;
+  return lesson ? <Player lesson={lesson} /> : <p className="sub">Loading…</p>;
+}
+
+function Page({ active, children }: { active: NavKey; children: ReactNode }) {
+  return <Shell active={active}>{children}</Shell>;
 }
 
 export default function App() {
   const params = new URLSearchParams(location.search);
+  const path = location.pathname.replace(/\/+$/, "") || "/";
   const id = params.get("lesson");
-  const [lesson, setLesson] = useState<Lesson | null>(null);
-  useEffect(() => {
-    if (id) fetch(`/lessons/${id}.json`).then((r) => r.json()).then(setLesson);
-  }, [id]);
-  if (params.has("teacher")) return <Teacher />;
-  if (params.has("room")) return <LiveEntry lessonId={params.get("lesson") ?? ""} joinCode={params.get("room") === "new" ? "" : params.get("room") ?? ""} />;
-  if (params.has("join")) return <LiveEntry lessonId="join" joinCode="" />;
-  if (!id && params.has("chat")) return <ChatPanel onClose={() => { location.href = "/"; }} />;
-  if (!id && params.has("live")) return <LiveClass lessonId="" getTime={() => 0} onClose={() => { location.href = "/"; }} />;
-  if (!id) return <LessonList />;
-  return lesson ? <Player lesson={lesson} /> : <p>लोड हो रहा है…</p>;
+  let view: ReactNode;
+  if (params.has("teacher")) { location.replace("/teacher"); view = null; }
+  else if (params.has("room")) view = <FullScreen><LiveEntry lessonId={params.get("lesson") ?? ""} joinCode={params.get("room") === "new" ? "" : params.get("room") ?? ""} /></FullScreen>;
+  else if (params.has("join")) view = <FullScreen><LiveEntry lessonId="join" joinCode="" /></FullScreen>;
+  else if (!id && params.has("chat")) view = <FullScreen><ChatPanel onClose={() => { location.href = "/"; }} /></FullScreen>;
+  else if (!id && params.has("live")) view = <FullScreen><LiveClass lessonId="" getTime={() => 0} onClose={() => { location.href = "/"; }} /></FullScreen>;
+  else if (id) view = <Page active="lessons"><LessonPage id={id} /></Page>;
+  else if (path === "/lessons") view = <Page active="lessons"><Lessons /></Page>;
+  else if (path === "/live") view = <Page active="live"><LivePage /></Page>;
+  else if (path === "/teacher") view = <Page active="teacher"><TeacherDashboard /></Page>;
+  else if (path === "/admin") view = <Page active="admin"><Admin /></Page>;
+  else view = <Page active="home"><Home /></Page>;
+  return <MeProvider>{view}</MeProvider>;
 }

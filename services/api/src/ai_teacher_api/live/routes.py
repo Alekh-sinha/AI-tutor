@@ -156,9 +156,12 @@ async def ws(websocket: WebSocket, code: str, name: str = "", key: str = "") -> 
                 await room.broadcast(room.public_state())
             elif t == "talk":  # push-to-talk: the child presses "speak" (stops the teacher at once) and "done" when finished
                 if ev.get("on"):
-                    if not room.may_speak(mid):
-                        room.raise_hand(mid)
+                    if not room.may_speak(mid) and room.floor is None:  # hold-to-speak: when nobody holds the floor, pressing "speak" takes it (the hand-raise queue is not offered in the UI)
+                        room.lower_hand(mid)
+                        room.floor, room.floor_since = mid, time.time()
                         await room.broadcast(room.public_state())
+                    if not room.may_speak(mid):
+                        await websocket.send_json({"type": "busy"})  # somebody else is speaking: wait for them to finish
                     else:
                         room.talking.add(mid)
                         room.last_child_audio = time.time()

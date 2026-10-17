@@ -6,7 +6,7 @@ export function LiveEntry({ lessonId, joinCode }: { lessonId: string; joinCode: 
   const [name, setName] = useState(() => { try { return localStorage.getItem("child-name") ?? ""; } catch { return ""; } });
   const [code, setCode] = useState(joinCode);
   const [hostKey, setHostKey] = useState(() => { try { return sessionStorage.getItem(`host-${joinCode}`) ?? ""; } catch { return ""; } });
-  const [entered, setEntered] = useState(!!hostKey && !!joinCode);
+  const [entered, setEntered] = useState((!!hostKey && !!joinCode) || (!!joinCode && (() => { try { return !!sessionStorage.getItem(`join-${joinCode}`); } catch { return false; } })()));
   const [err, setErr] = useState("");
   const remember = () => { try { localStorage.setItem("child-name", name); } catch { /* private mode */ } };
   const leave = () => { location.href = "/"; };
@@ -14,7 +14,7 @@ export function LiveEntry({ lessonId, joinCode }: { lessonId: string; joinCode: 
   const create = async () => {
     remember();
     const r = await fetch("/api/live/rooms", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ lesson_id: lessonId }) });
-    if (!r.ok) { setErr((await r.json().catch(() => ({}))).detail ?? "कक्षा नहीं बन पाई।"); return; }
+    if (!r.ok) { const d = (await r.json().catch(() => ({}))).detail; setErr(typeof d === "string" ? d : d?.message ?? "कक्षा नहीं बन पाई।"); return; }
     const j = await r.json();
     try { sessionStorage.setItem(`host-${j.code}`, j.host_key); } catch { /* ignore */ }
     setCode(j.code); setHostKey(j.host_key); setEntered(true);

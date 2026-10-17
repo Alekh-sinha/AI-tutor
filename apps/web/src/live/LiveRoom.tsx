@@ -20,11 +20,9 @@ function subtitle(text: string): string {
 export function LiveRoom({ code, name, hostKey, onLeave }: { code: string; name: string; hostKey: string; onLeave: () => void }) {
   const r = useLiveRoom(code, name, hostKey);
   const [unlocked, setUnlocked] = useState(false);
-  const [topic, setTopic] = useState("");
+  const [topic, setTopic] = useState(() => { try { return sessionStorage.getItem(`topic-${code}`) ?? ""; } catch { return ""; } });
   const [text, setText] = useState("");
-  const queueNo = r.state.queue.findIndex((q) => q.id === r.me.id) + 1;
-  const handUp = queueNo > 0;
-  const listen = async () => { await r.unlock(); setUnlocked(true); };
+    const listen = async () => { await r.unlock(); setUnlocked(true); };
 
   if (r.ended) return (
     <div className="lr lr-center"><h2>{r.ended}</h2><button className="lr-btn primary" onClick={onLeave}>← वापस</button></div>
@@ -66,29 +64,22 @@ export function LiveRoom({ code, name, hostKey, onLeave }: { code: string; name:
           {r.heard.length > 0 && <p className="lr-heard">🧒 {r.heard[r.heard.length - 1].name}: {r.heard[r.heard.length - 1].text}</p>}
           {r.state.finished && <p className="lr-done">🎓 क्लास पूरी हुई — अब आप टीचर से बात करके कोई भी सवाल पूछ सकते हैं।</p>}
           <div className="lr-controls">
-            {r.iHaveFloor || r.solo ? (
-              <div className="lr-mine">
-                {!r.talking ? (
-                  <button className="lr-btn primary lr-talk" onClick={r.talk}>🎤 बोलिए</button>
-                ) : (
-                  <div className="lr-row">
-                    <p className="lr-mic">🔴 सुन रही हूँ… बोलिए</p>
-                    <button className="lr-btn primary" onClick={r.done}>✔ बोल दिया</button>
-                  </div>
-                )}
-                <input className="lr-input" placeholder="या यहाँ लिखिए…" value={text} maxLength={300} onChange={(e) => setText(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter" && text.trim()) { r.say(text.trim()); setText(""); } }} />
-              </div>
-            ) : handUp ? (
-              <button className="lr-btn" onClick={r.lower}>✋ कतार में नंबर {queueNo} — हाथ नीचे करें</button>
-            ) : (
-              <button className="lr-btn primary" onClick={r.hand}>✋ हाथ उठाइए</button>
-            )}
+            <div className="lr-mine">
+              {!r.talking ? (
+                <button className="lr-btn primary lr-talk" disabled={!!r.state.floor && r.state.floor !== r.me.id && !r.solo} onClick={r.talk}>🎤 बोलिए</button>
+              ) : (
+                <div className="lr-row">
+                  <p className="lr-mic">🔴 सुन रही हूँ… बोलिए</p>
+                  <button className="lr-btn primary" onClick={r.done}>✔ बोल दिया</button>
+                </div>
+              )}
+              <input className="lr-input" placeholder="या यहाँ लिखिए…" value={text} maxLength={300} onChange={(e) => setText(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && text.trim()) { r.say(text.trim()); setText(""); } }} />
+            </div>
             {r.state.floor && r.state.floor !== r.me.id && !r.solo && <p className="lr-floor">🎤 अभी बोल रहे हैं: {r.state.floor_name}</p>}
             {r.me.host && (
               <div className="lr-host">
                 <button className="lr-btn" onClick={r.next} disabled={r.state.teacher_busy}>▶ आगे बढ़िए</button>
-                {!r.solo && <button className="lr-btn" onClick={r.grant} disabled={!r.state.queue.length}>🎤 अगले को बोलने दें ({r.state.queue.length})</button>}
               </div>
             )}
           </div>

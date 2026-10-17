@@ -66,7 +66,7 @@ def verify_google(credential: str) -> dict:
 def _user_for(email: str | None) -> dict | None:
     if mode() == "off":
         credits.ADMIN_EMAILS.add(DEV)
-        return credits.login(DEV, "Local admin")
+        return credits.get(DEV) or credits.login(DEV, "Local admin")
     return credits.get(email) if email else None
 
 
