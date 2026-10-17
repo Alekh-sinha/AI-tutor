@@ -19,9 +19,16 @@ async def lifespan(_: FastAPI):
     """With DATA_BUCKET set: restore the files from the bucket before serving, push changes while running and once more on shutdown."""
     import asyncio
 
+    import os
+
+    from ai_teacher_api.access import credits
+
     if persist.configure():
         await asyncio.to_thread(persist.start)
+    if os.environ.get("STORE") == "firestore":
+        credits.enable_batching()  # spends are summed and written once a second per user
     yield
+    await asyncio.to_thread(credits.flush)
     await asyncio.to_thread(persist.stop)
 
 

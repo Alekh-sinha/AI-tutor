@@ -2,6 +2,7 @@
 one user) at the same moment never lose or double-count a charge. Rules: admin = unlimited; an `active` user may spend while credit is left and today's cap (IST day) is not reached."""
 
 import os
+import threading
 import time
 
 from ai_teacher_api.access import pricing
@@ -60,7 +61,7 @@ def is_admin(email: str) -> bool:
 def _new(email: str, name: str = "", picture: str = "") -> dict:
     admin = is_admin(email)
     return {"email": email, "name": name, "picture": picture, "role": "admin" if admin else "user", "status": "active" if admin else "pending",
-            "credit_micro": 0, "spent_micro": 0, "day": today(), "day_spent_micro": 0, "daily_cap_micro": round(DAILY_CAP_USD * M),
+            "credit_micro": 0, "spent_micro": 0, "day_spent": {}, "daily_cap_micro": round(DAILY_CAP_USD * M),
             "created": time.time(), "last_login": time.time(), "login_count": 0, "counters": {}}
 
 
@@ -82,13 +83,17 @@ def get(email: str) -> dict | None:
     return get_store().get("users", email.lower())
 
 
+def _day_spent(d: dict) -> int:
+    return int((d.get("day_spent") or {}).get(today(), 0)) + _pending_total(d["email"])[0]
+
+
 def balance_micro(d: dict) -> int:
-    return d.get("credit_micro", 0) - d.get("spent_micro", 0)
+    return d.get("credit_micro", 0) - d.get("spent_micro", 0) - _pending_total(d["email"])[0]
 
 
 def view(d: dict) -> dict:
     """The user as the browser sees it (dollars, not micro-dollars)."""
-    day_spent = d.get("day_spent_micro", 0) if d.get("day") == today() else 0
+    day_spent = _day_spent(d)
     return {"email": d["email"], "name": d.get("name", ""), "picture": d.get("picture", ""), "role": d["role"], "status": d["status"],
             "balance_usd": round(balance_micro(d) / M, 2), "credit_usd": round(d.get("credit_micro", 0) / M, 2), "spent_usd": round(d.get("spent_micro", 0) / M, 2),
             "today_usd": round(day_spent / M, 2), "daily_cap_usd": round(d.get("daily_cap_micro", 0) / M, 2), "unlimited": d["role"] == "admin",
@@ -108,33 +113,92 @@ def check(email: str) -> None:
         raise NotApproved()
     if balance_micro(d) <= 0:
         raise CreditExhausted()
-    if d.get("day") == today() and d.get("day_spent_micro", 0) >= d.get("daily_cap_micro", 0):
+    if _day_spent(d) >= d.get("daily_cap_micro", 0):
         raise DailyCapReached()
 
 
+# ---- spends are written as atomic increments; with batching on (the deployed service) they are first summed in memory and written once a second per user,
+# so a lesson build with many parallel model calls does not hammer one database document. check() counts what is still waiting to be written.
+_pending: dict[str, dict] = {}
+_plock = threading.Lock()
+_batching = False
+
+
+_inflight: dict[str, int] = {}  # popped from _pending, being written right now (still counted by check())
+
+
+def _pending_total(email: str) -> tuple[int, int]:
+    p = _pending.get(email)
+    return ((p["micro"] if p else 0) + _inflight.get(email, 0), 0)
+
+
 def spend(email: str, micro: int, kind: str, model: str = "", detail: str = "", counter: str = "", counter_n: int = 0) -> dict | None:
-    """Charge `micro` to the user (atomic) and write a ledger line. Unknown users (CLI runs) are not charged."""
+    """Charge `micro` to the user and write a ledger line. Unknown users (command line runs) are not charged."""
     if micro <= 0 and not counter:
         return None
     email = email.lower()
+    line = {"email": email, "ts": time.time(), "kind": kind, "model": model, "micro": micro, "detail": detail[:200]} if micro > 0 else None
+    if _batching:
+        with _plock:
+            p = _pending.setdefault(email, {"micro": 0, "counters": {}, "lines": []})
+            p["micro"] += micro
+            if counter:
+                p["counters"][counter] = p["counters"].get(counter, 0) + counter_n
+            if line:
+                p["lines"].append(line)
+        return None
+    return _write(email, micro, {counter: counter_n} if counter else {}, [line] if line else [])
+
+
+def _write(email: str, micro: int, counters: dict, lines: list) -> dict | None:
     store = get_store()
     if store.get("users", email) is None:
         return None
+    deltas = {"spent_micro": micro, f"day_spent.{today()}": micro}
+    deltas.update({f"counters.{k}": v for k, v in counters.items()})
+    store.increment("users", email, deltas)
+    if lines:
+        store.add_many("ledger", lines)
+    return store.get("users", email)
 
-    def fn(d):
-        if d.get("day") != today():
-            d["day"], d["day_spent_micro"] = today(), 0
-        d["spent_micro"] = d.get("spent_micro", 0) + micro
-        d["day_spent_micro"] = d.get("day_spent_micro", 0) + micro
-        if counter:
-            c = d.setdefault("counters", {})
-            c[counter] = c.get(counter, 0) + counter_n
-        return d
 
-    out = store.atomic("users", email, fn)
-    if micro > 0:
-        store.add("ledger", {"email": email, "ts": time.time(), "kind": kind, "model": model, "micro": micro, "detail": detail[:200]})
-    return out
+def flush() -> None:
+    """Write everything that is waiting (called once a second by the flusher and on shutdown)."""
+    with _plock:
+        batch = dict(_pending)
+        _pending.clear()
+        for email, p in batch.items():
+            _inflight[email] = _inflight.get(email, 0) + p["micro"]
+    for email, p in batch.items():
+        try:
+            _write(email, p["micro"], p["counters"], p["lines"])
+            with _plock:
+                _inflight[email] = _inflight.get(email, 0) - p["micro"]
+        except Exception:
+            with _plock:
+                _inflight[email] = _inflight.get(email, 0) - p["micro"]  # noqa: BLE001 - put it back, the next round writes it
+            with _plock:
+                q = _pending.setdefault(email, {"micro": 0, "counters": {}, "lines": []})
+                q["micro"] += p["micro"]
+                q["lines"] += p["lines"]
+                for k, v in p["counters"].items():
+                    q["counters"][k] = q["counters"].get(k, 0) + v
+            raise
+
+
+def enable_batching(interval: float = 1.0) -> None:
+    global _batching
+    _batching = True
+
+    def loop():
+        while True:
+            time.sleep(interval)
+            try:
+                flush()
+            except Exception:  # noqa: BLE001
+                pass
+
+    threading.Thread(target=loop, daemon=True, name="credit-flush").start()
 
 
 def grant(email: str, usd: float, by: str, note: str = "") -> dict:

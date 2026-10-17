@@ -102,7 +102,7 @@ def overview() -> dict:
     reqs = store.query("requests", {"status": "open"})
     return {"users": len(users), "active": sum(1 for x in users if x["status"] == "active" and x["role"] != "admin"), "pending_users": sum(1 for x in users if x["status"] == "pending"),
             "open_access_requests": sum(1 for r in reqs if r["type"] == "access"), "open_credit_requests": sum(1 for r in reqs if r["type"] == "credit"),
-            "spent_today_usd": round(sum(x.get("day_spent_micro", 0) for x in users if x.get("day") == day) / credits.M, 2),
+            "spent_today_usd": round(sum((x.get("day_spent") or {}).get(day, 0) for x in users) / credits.M, 2),
             "spent_total_usd": round(sum(x.get("spent_micro", 0) for x in users) / credits.M, 2),
             "granted_total_usd": round(sum(x.get("credit_micro", 0) for x in users) / credits.M, 2),
             "logged_in_today": sum(1 for x in users if credits.time.strftime("%Y-%m-%d", credits.time.gmtime(x.get("last_login", 0) + 19800)) == day),

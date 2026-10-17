@@ -47,6 +47,10 @@ class MemoryStore:
         self.set(coll, id, doc)
         return id
 
+    def add_many(self, coll: str, docs: list[dict]) -> None:
+        for d in docs:
+            self.add(coll, d)
+
     def atomic(self, coll: str, id: str, fn: Callable[[dict | None], dict]) -> dict:
         """Read-modify-write one document; concurrent callers never lose an update."""
         with self.lock:
@@ -54,6 +58,18 @@ class MemoryStore:
             self.data.setdefault(coll, {})[id] = new
             self._save()
             return copy.deepcopy(new)
+
+    def increment(self, coll: str, id: str, deltas: dict[str, float]) -> None:
+        """Add to numeric fields without reading first (`a.b` = field b inside map a). Creates missing fields."""
+        with self.lock:
+            doc = self.data.setdefault(coll, {}).setdefault(id, {})
+            for path, delta in deltas.items():
+                node = doc
+                *parents, leaf = path.split(".")
+                for k in parents:
+                    node = node.setdefault(k, {})
+                node[leaf] = node.get(leaf, 0) + delta
+            self._save()
 
     def query(self, coll: str, where: dict | None = None, order: str | None = None, desc: bool = True, limit: int = 200) -> list[dict]:
         with self.lock:
@@ -86,6 +102,13 @@ class FirestoreStore:
         ref.set(doc)
         return ref.id
 
+    def add_many(self, coll, docs):
+        for i in range(0, len(docs), 400):  # one round trip per 400 documents
+            batch = self.db.batch()
+            for d in docs[i:i + 400]:
+                batch.set(self._c(coll).document(), d)
+            batch.commit()
+
     def atomic(self, coll, id, fn):
         ref = self._c(coll).document(id)
 
@@ -97,6 +120,10 @@ class FirestoreStore:
             return new
 
         return run(self.db.transaction())
+
+    def increment(self, coll, id, deltas):
+        """Server-side atomic increments (no transaction, so a busy user's many small spends do not contend for the document)."""
+        self._c(coll).document(id).update({k: self.fs.Increment(v) for k, v in deltas.items()})
 
     def query(self, coll, where=None, order=None, desc=True, limit=200):
         q = self._c(coll)
