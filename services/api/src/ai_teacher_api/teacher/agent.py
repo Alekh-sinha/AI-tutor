@@ -8,6 +8,7 @@ from google.adk.agents import LlmAgent
 from google.adk.planners import BuiltInPlanner
 from google.genai import types
 
+from ai_teacher_api.safety import policy
 from ai_teacher_api.authoring.edit_loop import replace_text
 from ai_teacher_api.common.settings import resolve_model
 from ai_teacher_api.authoring import illustrator as ill
@@ -36,6 +37,7 @@ in rural Bihar. The teacher tells you, in Hindi or English (typed, spoken or wit
   structure (one check question with options A, B, C and a [Pause] line per concept, the recap and the home activity).
 Tools: view_picture(name); edit_image(name, change) changes only what you ask; generate_image(name, prompt) for a NEW picture with a new name; replace_text(old, new) edits the lecture
 (old must appear exactly once); ask_teacher(question)."""
+INSTRUCTION += "\n\n" + policy.POLICY
 
 
 def build_teacher_editor(model: str | None = None) -> LlmAgent:

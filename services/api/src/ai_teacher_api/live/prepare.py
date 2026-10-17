@@ -13,6 +13,7 @@ from google import genai
 from google.genai import types
 from pydantic import BaseModel, Field
 
+from ai_teacher_api.safety import gate, policy
 from ai_teacher_api.common import logsetup, picturegen
 from ai_teacher_api.common.settings import DEFAULT_TEXT_MODEL, PROJECT, TEXT_LOCATION, WEB_PUBLIC
 from ai_teacher_api.live import figures
@@ -28,7 +29,7 @@ PREP_BUDGET_S = 600  # the children wait at most this long for the pictures (the
 # the live teacher's pictures may be illustrations (the user accepted cartoons here; recorded lessons keep their photographs)
 LIVE_STYLE = (
     "Friendly children's-book illustration, flat bright colours, bold clear shapes, expressive faces and body language, simple everyday Indian village setting and clothing, uncluttered background, "
-    "readable at a glance on a small phone screen. ABSOLUTELY NO text, letters, numbers, logos or signs anywhere. Scene: "
+    "readable at a glance on a small phone screen. ABSOLUTELY NO text, letters, numbers, logos or signs anywhere. " + policy.PICTURE_RULE + " Scene: "
 )
 
 PLANNER = """You are the resource maker for a teacher who is about to teach a LIVE VOICE CLASS to Class 6 children (11-12 years, Hindi medium, rural Bihar). The teacher speaks; the children look at a board that shows one screen at a time.
@@ -41,6 +42,7 @@ Make:
 - `figures`: 7 or 8 HTML FIGURES for what a picture cannot show: named parts with labels, a comparison as a table, a scale or number line, cause -> effect in 2-3 boxes, steps in order, a quantity as blocks, a small animation of a change. Each is ONE simple board figure (3-6 elements, a few Hindi words) with its own `intent`.
   `description`: English instruction to the figure writer that spells out EXACTLY which Hindi labels to show and how they are arranged, at most 70 words; never ask for drawings of objects or people (the pictures do that) and no diagonal lines or curves.
 Every step must have at least one picture or figure; spread them over the steps. `caption`: at most 4 Hindi words. `name`: short lowercase ASCII id (letters, digits, underscore) that starts with p for pictures and f for figures. `step`: the step it belongs to (copy the step's phrase)."""
+PLANNER += "\n\n" + policy.POLICY
 
 
 class PicSpec(BaseModel):
@@ -133,6 +135,7 @@ async def make_pictures(code: str, specs: list[PicSpec], progress) -> dict[str, 
 CHECKER = """You look at ONE picture made for a teacher who teaches Class 6 children (Hindi medium, rural Bihar) and judge it honestly. You are given the INTENT (the one thing a child should understand from it) and the description the picture was drawn from.
 - `shows`: what the picture REALLY shows, in 2 plain English sentences (who or what, doing what, with what visible result). Describe what is there, not what was asked for.
 - `communicates`: true only if a child who sees the picture without any words would understand the intent. Be strict: false if the objects just stand there, if the key action or effect cannot be seen, if the wrong things are shown, if there is any text, letters or numbers, or if hands, faces or objects are deformed.
+- Safety: communicates is false, and `problems` says "unsafe", if the picture shows nudity, anything sexual, gore or violence, a weapon, or a realistic body where a symbolic diagram was needed.
 - `problems`: short list of what is wrong (empty if communicates).
 - `point_out`: 1-2 short things the teacher should draw the children's attention to, taken from what is really visible.
 - `better_description`: only when communicates is false: a new description (English, at most 40 words) of ONE frozen moment in which the intent is clearly visible, fixing the problems. Otherwise empty."""
@@ -201,6 +204,10 @@ def catalog_text(pics: dict[str, dict], figs: dict[str, dict]) -> str:
 async def prepare_topic(code: str, topic: str, progress) -> dict:
     """Notes + the kit for a topic. Returns {"refused": reason} or {"notes", "steps", "pictures": {name: {src, caption, step, intent, shows, point_out}}, "figures": {name: {html, caption, step, intent, description}}, "catalog": text}."""
     t0 = time.time()
+    verdict = await gate.screen(topic, "live-topic")  # safety gate: nothing is planned or drawn for a refused topic
+    if not verdict.ok:
+        return {"refused": verdict.message_hi}
+    topic = verdict.rewrite or topic  # a sensitive topic (puberty, reproduction) is taught as its textbook-level version
     await progress("टीचर क्लास की तैयारी कर रही हैं…")
     r = await prep.prepare([types.Part(text=f"The children want to learn this: {topic}")], prep.recorded_lessons(), None, f"class-{code}")
     if r["refused"]:

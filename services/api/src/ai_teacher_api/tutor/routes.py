@@ -8,7 +8,7 @@ import json
 import re
 import time
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from google.adk.agents import RunConfig
 from google.adk.runners import Runner
@@ -16,10 +16,12 @@ from google.adk.sessions import InMemorySessionService
 from google.genai import types
 from pydantic import BaseModel, Field
 
+from ai_teacher_api.access import auth, library
 from ai_teacher_api.common import logsetup
 from ai_teacher_api.common.paths import DATA_DIR, split_public_id
 from ai_teacher_api.common.settings import DEFAULT_VOICE, WEB_PUBLIC
 from ai_teacher_api.content.brief import LessonBrief, render
+from ai_teacher_api.safety import gate
 from ai_teacher_api.tutor import agent as tutor
 from ai_teacher_api.tutor import chat as plain_chat
 from ai_teacher_api.tutor import prep
@@ -111,12 +113,24 @@ async def _run_turn(body: ChatIn, turn: tutor.Turn, parts: list[types.Part], kin
 
 
 @router.post("/chat")
-async def chat(body: ChatIn) -> StreamingResponse:
+async def chat(body: ChatIn, u: dict = Depends(auth.active_user)) -> StreamingResponse:
     if len(body.text) > MAX_TEXT or len(body.image_b64 or "") > MAX_IMAGE_B64 or len(body.audio_b64 or "") > MAX_AUDIO_B64:
         raise HTTPException(413, "message too large")
     if not (body.text.strip() or body.image_b64 or body.audio_b64):
         raise HTTPException(400, "empty message")
+    if body.lesson_id and not library.can_see(body.lesson_id, u):
+        raise HTTPException(403, "this lesson is not shared with you")
     lesson = _lesson(body.lesson_id)
+    media = ([tutor.blob_part(body.image_b64, body.image_mime)] if body.image_b64 else []) + ([tutor.blob_part(body.audio_b64, body.audio_mime)] if body.audio_b64 else [])
+    verdict = await gate.screen(body.text, "student", media)  # safety gate: refused / distress messages never reach the teacher agent
+    if not verdict.ok:
+        say = verdict.message_hi
+
+        async def blocked():
+            for ev in ({"type": "text", "text": say, "audio": None, "safety": verdict.decision}, {"type": "done"}):
+                yield f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
+
+        return StreamingResponse(blocked(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
     st = _state.setdefault(body.session_id, {"turns": 0, "board": [], "pictures": {}})
     if st["turns"] >= MAX_TURNS[body.mode]:
         log.warn("session-limit", session=body.session_id, mode=body.mode)
@@ -142,6 +156,8 @@ async def chat(body: ChatIn) -> StreamingResponse:
     if body.interrupted_after:
         head += f"\n\nThe child interrupted you after you said: \"{body.interrupted_after}\". Answer first, then offer to continue."
     ask = f"\n\nCHILD'S MESSAGE: {body.text}" if body.text.strip() else "\n\nThe child's message is in the attachment."
+    if verdict.decision == "sensitive":
+        ask += "\n\n(SAFETY NOTE: a sensitive school topic. Answer at NCERT textbook level: calm, scientific words, no sexual detail, symbolic diagrams only; if it is a private matter, suggest asking a parent or trusted teacher.)"
     parts, kinds = [types.Part(text=head + ask)], ["text"] if body.text.strip() else []
     if body.image_b64:
         parts.append(tutor.blob_part(body.image_b64, body.image_mime))

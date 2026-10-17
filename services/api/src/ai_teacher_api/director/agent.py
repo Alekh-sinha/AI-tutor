@@ -5,6 +5,7 @@ the teacher's spoken lines plus what appears on the board with each line (pictur
 from google.adk.agents import LlmAgent
 from pydantic import BaseModel
 
+from ai_teacher_api.safety import policy
 from ai_teacher_api.common.lesson import HomeActivity
 from ai_teacher_api.director.script import LessonScript
 from ai_teacher_api.common.settings import resolve_model
@@ -33,6 +34,7 @@ BOARD. The board is a white blackboard the teacher fills as she speaks:
 - Ids unique (n1, c1; pictures keep their file names). Do not draw anything new: use only the lecture's pictures. No `svg` cues.
 Also fill `activity` from the lecture's home activity: title, instructions (what to need, do, observe, conclude), submit_as (photo, voice or both), and 3-4 observable rubric criteria.
 Finish with the recap and one line announcing the home activity."""
+INSTRUCTION += "\n\n" + policy.POLICY
 
 
 class Directed(BaseModel):

@@ -17,6 +17,7 @@ from google.adk.agents import LlmAgent
 from google.adk.planners import BuiltInPlanner
 from google.genai import types
 
+from ai_teacher_api.safety import policy
 from ai_teacher_api.common import logsetup, workspace
 from ai_teacher_api.common.settings import WEB_PUBLIC, retrying_model
 from ai_teacher_api.authoring import illustrator as ill
@@ -214,6 +215,7 @@ How you work:
 - Facts come from the BOOK POINTS in the message and ordinary school-level knowledge you are sure of. If you are not sure, say so honestly ("मुझे पक्का नहीं पता, अपने शिक्षक से पूछिए"); never guess.
 - Stay with the child's studies and this lesson. For anything else (personal details, unsafe or adult topics, chat), kindly bring them back; never ask for personal information.
 - Never mock a wrong idea; say what is right in it, then fix it. Short answers: usually 3-6 `say` calls in all. If you ask the child a question, STOP right after asking it: the child answers in the next message; never answer your own question."""
+INSTRUCTION += "\n\n" + policy.POLICY
 
 
 LIVE_START = """START THE LIVE CLASS now. You are leading this class on the lesson's topic, not answering a question. First `plan` the class (3-5 steps, one per concept of the BOOK POINTS).

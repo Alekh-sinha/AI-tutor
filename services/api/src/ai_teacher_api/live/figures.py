@@ -10,6 +10,7 @@ from html.parser import HTMLParser
 from google import genai
 from google.genai import types
 
+from ai_teacher_api.safety import policy
 from ai_teacher_api.common import logsetup
 from ai_teacher_api.common.settings import DEFAULT_TEXT_MODEL, PROJECT, TEXT_LOCATION
 
@@ -25,6 +26,7 @@ Rules: layout with flexbox/grid and percentages only, no pixel coordinates, no p
 Text in Hindi (Devanagari), font-size at least 15px, short words. Arrows with characters (→ ← ↑ ↓ ⇄) or CSS borders; emoji allowed for small icons. Soft colours on white: dark ink #1f2937, accent #0f766e, warm #c2410c, light fills. Rounded boxes, clear spacing. Everything must fit without scrolling.
 Never draw an object or a living thing from emoji and blocks (it looks crude): show objects as a labelled box with ONE emoji, or leave them to the photos. A small CSS @keyframes animation (translateX in %, opacity) is welcome when the idea is motion.
 Output ONLY the HTML fragment, starting with <div class="fig">. No markdown fences."""
+WRITER += "\n\n" + policy.POLICY
 
 
 class _Checker(HTMLParser):

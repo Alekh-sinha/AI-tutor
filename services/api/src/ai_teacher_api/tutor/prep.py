@@ -11,6 +11,7 @@ from google.adk.sessions import InMemorySessionService
 from google.adk.tools import google_search
 from google.genai import types
 
+from ai_teacher_api.safety import policy
 from ai_teacher_api.common import logsetup
 from ai_teacher_api.common.resilience import with_model_fallback
 from ai_teacher_api.common.paths import DATA_DIR, split_public_id
@@ -54,6 +55,7 @@ STEPS: 3-5 steps, one concept each. For each: a familiar everyday example from r
 MISCONCEPTIONS: 2-3 usual wrong ideas of children on this topic.
 If the request is not a school topic, or is unsafe, write only: REFUSE: <short reason in Hindi, kind, offering to help with studies>.
 The last line must be: RELATED: followed by the ids of the recorded lessons below that cover part of this topic (comma separated), or NONE."""
+INSTRUCTION += "\n\n" + policy.POLICY
 
 
 async def prepare(parts: list[types.Part], lessons: list[dict], model: str | None, session: str) -> dict:

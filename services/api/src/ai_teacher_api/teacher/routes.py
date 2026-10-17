@@ -34,6 +34,7 @@ from ai_teacher_api.common.paths import DATA_DIR, DEFAULT_CHAPTER, NAME, chapter
 from ai_teacher_api.common.settings import DEFAULT_TEXT_MODEL, DEFAULT_VOICE, WEB_PUBLIC
 from ai_teacher_api.content.brief import LessonBrief, render
 from ai_teacher_api.director import run_direct
+from ai_teacher_api.safety import gate
 from ai_teacher_api.teacher import jobs
 from ai_teacher_api.teacher.agent import ASKED, build_teacher_editor
 
@@ -332,6 +333,9 @@ async def edit(lesson: str, body: EditIn, chapter: str = DEFAULT_CHAPTER) -> Str
     _dir(lesson, chapter)
     if not (body.instruction.strip() or body.audio_b64 or body.image_b64):
         raise HTTPException(400, "empty instruction")
+    verdict = await gate.screen(body.instruction, "teacher-edit")  # the editor may not be used to bring unsafe content into a children's lesson
+    if not verdict.ok:
+        raise HTTPException(422, {"code": "unsafe", "message": verdict.message_en, "message_hi": verdict.message_hi})
     q: asyncio.Queue = asyncio.Queue()
     task = asyncio.create_task(_edit_run(lesson, chapter, body, q))
 

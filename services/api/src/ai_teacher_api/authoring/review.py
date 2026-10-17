@@ -7,6 +7,7 @@ Both return issues in plain words that go straight back to the writer / the pict
 
 import io
 import re
+from ai_teacher_api.safety import policy
 from ai_teacher_api.common.plaintext import has_latex
 from pathlib import Path
 
@@ -180,6 +181,7 @@ def contact_sheets(lesson: Lesson, public: Path, per_sheet: int = 4) -> list[byt
 PICTURE_REVIEW = """You review the photographs of a recorded lesson for village children, shown on contact sheets: each panel is one
 scene (photos with their id and caption, the notes shown, and the words the teacher says meanwhile). Report only REAL problems:
 - the photo does not show what its caption says (wrong object, wrong material, wrong number of things);
+- the photo shows nudity, anything sexual, gore or violence, or a weapon (always report: write "unsafe" in the problem);
 - the photo shows readable or gibberish text, a logo, or a sign;
 - the photo looks cartoonish, deformed (hands, faces), or unrealistic;
 - the photo does not fit what the teacher is saying in that scene.
@@ -291,7 +293,7 @@ Report only REAL, specific problems. Check:
    consistently; no typos.
 6. ATTENTION: the screen should change when the teacher's point changes. Long stretches without a picture are counted by code, so do not report them. Do report any
    experience, observation or comparison that the narration asks the child to look at or imagine and that is essential to understand the concept but has no picture.
-7. The recap adds no new material. The home activity is safe, needs only ordinary household things, no purchase, internet or adult, and states what to need, do, observe
+7. SAFETY (always report): no sexual or romantic content, nudity, graphic violence, weapons, drugs or demeaning content; body and reproduction topics, if any, are textbook-level and use symbolic diagrams. The recap adds no new material. The home activity is safe, needs only ordinary household things, no purchase, internet or adult, and states what to need, do, observe
    and conclude, and reinforces an objective.
 For every issue: where = "concept N", "opening", "recap", "home activity" or a picture id; problem = what is wrong; fix = the concrete change (for a photo: what the new
 photo must show). If the lesson is good return an empty list. Do not invent problems."""

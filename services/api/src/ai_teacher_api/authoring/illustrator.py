@@ -13,13 +13,14 @@ from google.adk.agents import LlmAgent
 from google.genai import types
 from PIL import Image
 
+from ai_teacher_api.safety import policy
 from ai_teacher_api.common.settings import PROJECT, resolve_model
 
 IMAGE_MODEL = "gemini-3.1-flash-image"  # setting: any image model callable at `global`
 STYLE = (
     "Realistic documentary photograph, natural daylight, true-to-life colours and textures, candid and warm, shallow depth of "
     "field, in a real rural village in Bihar, India. Authentic everyday Indian clothing, objects and homes; dignified, not staged. "
-    "NOT a cartoon, NOT an illustration, NOT a 3D render. ABSOLUTELY NO text, letters, numbers, logos, signs or branded packaging anywhere. Subject: "
+    "NOT a cartoon, NOT an illustration, NOT a 3D render. ABSOLUTELY NO text, letters, numbers, logos, signs or branded packaging anywhere. " + policy.PICTURE_RULE + " Subject: "
 )
 MAX_IMAGE_CALLS = 30
 MAX_REFERENCES = 4
@@ -218,6 +219,7 @@ with pictures placed where the teacher points (![what the child sees and why](fi
 a line "[Pause]", and the correct answer with a short explanation (no new ideas in it). The question tests the aim, ideally in a slightly different
 situation, with one correct option and two tempting misconceptions. End with a short recap, and one safe home activity using household things (what to
 need, do, observe, conclude)."""
+INSTRUCTION += "\n\n" + policy.POLICY
 
 
 def build_illustrator(model: str | None = None) -> LlmAgent:

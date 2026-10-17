@@ -10,6 +10,7 @@ from google.adk.agents import LlmAgent
 from google.adk.planners import BuiltInPlanner
 from google.genai import types
 
+from ai_teacher_api.safety import policy
 from ai_teacher_api.common import logsetup
 from ai_teacher_api.common.settings import retrying_model
 from ai_teacher_api.tutor import agent as tutor
@@ -25,6 +26,7 @@ Facts come from the BOOK POINTS in the message (when given) and school-level kno
 Use `show_lesson_picture` or `draw_picture` only when a picture truly helps (at most one or two per answer; a new picture is slow, so prefer a lesson picture).
 Stay with the child's studies; kindly steer away from anything else, never ask for personal information. Never mock a wrong idea: say what is right in it, then fix it.
 If it helps, end with one small question to check understanding."""
+INSTRUCTION += "\n\n" + policy.POLICY
 
 
 def build_chat_agent(model: str | None = None) -> LlmAgent:
