@@ -11,6 +11,7 @@ import time
 from google import genai
 from google.genai import types
 
+from ai_teacher_api.access import credits, pricing
 from ai_teacher_api.common import logsetup
 from ai_teacher_api.common.settings import LIVE_LOCATION, LIVE_MODEL, PROJECT
 from ai_teacher_api.live import judge, prompt, tools
@@ -194,6 +195,7 @@ async def _handle(room: Room, turn: tutor.Turn, s, m: types.LiveServerMessage, s
             room.teacher_busy = True
             await room.broadcast(room.public_state())
         state["audio_bytes"] += len(m.data)
+        room.out_audio_s += len(m.data) / 48000
         state["play_end"] = max(state["play_end"], time.time()) + len(m.data) / 48000  # 24 kHz 16-bit mono: when the children have heard everything sent so far
         await room.broadcast_bytes(m.data)
     sc = m.server_content
@@ -247,6 +249,30 @@ async def _handle(room: Room, turn: tutor.Turn, s, m: types.LiveServerMessage, s
     return None
 
 
+METER_EVERY = 20.0  # seconds between charges to the host
+
+
+async def _meter(room: Room) -> None:
+    """Charge the host for the live session as it runs (speech out, children's microphone in, time), and end the class kindly when the credit or the day's cap is used up."""
+    last = {"out": 0.0, "in": 0.0, "t": time.time()}
+    while True:
+        await asyncio.sleep(METER_EVERY)
+        now = time.time()
+        micro = pricing.live_cost(room.out_audio_s - last["out"], room.in_audio_s - last["in"], now - last["t"])
+        last.update({"out": room.out_audio_s, "in": room.in_audio_s, "t": now})
+        if not room.owner:
+            continue
+        await asyncio.to_thread(credits.spend, room.owner, micro, "live", LIVE_MODEL, f"room {room.code}", "live_seconds", round(METER_EVERY))
+        try:
+            await asyncio.to_thread(credits.check, room.owner)
+        except credits.AccessDenied as e:
+            log.warn("class-stopped-credit", room=room.code, owner=room.owner, code=e.code)
+            await room.broadcast({"type": "ended", "reason": e.hi, "code": e.code})
+            if room.task:
+                room.task.cancel()
+            return
+
+
 async def run_room(room: Room, instruction: str, pictures: dict[str, str], voice: str, first_message: str) -> None:
     """Runs until the class ends (host leaves, time cap, or repeated failures)."""
     client = genai.Client(vertexai=True, project=PROJECT, location=LIVE_LOCATION)
@@ -257,7 +283,7 @@ async def run_room(room: Room, instruction: str, pictures: dict[str, str], voice
     room.notes = instruction
     turn.extra["room"] = room
     state = {"handle": None, "said": "", "heard": "", "audio_bytes": 0, "turns": 0, "pictures": pictures, "verifying": False, "checked": False, "tool_calls": 0, "pending_tools": 0, "auto": 0, "last_msg": time.time(), "turn_t0": time.time(), "play_end": 0.0, "hinted": False, "last_nudge": 0.0}
-    helpers = [asyncio.create_task(_forward(room, turn)), asyncio.create_task(_watch_floor(room)), asyncio.create_task(_watch_idle(room, state))]
+    helpers = [asyncio.create_task(_forward(room, turn)), asyncio.create_task(_watch_floor(room)), asyncio.create_task(_watch_idle(room, state)), asyncio.create_task(_meter(room))]
     t_start, attempt = time.time(), 0
     try:
         while attempt <= MAX_RECONNECTS and time.time() - t_start < MAX_SESSION_SECONDS:

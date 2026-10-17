@@ -10,10 +10,11 @@ import json
 import secrets
 import time
 
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from google.genai import types
 from pydantic import BaseModel, Field
 
+from ai_teacher_api.access import auth, credits, usage
 from ai_teacher_api.common import logsetup
 from ai_teacher_api.common.settings import DEFAULT_VOICE
 from ai_teacher_api.live import prepare, prompt, session
@@ -24,6 +25,7 @@ from ai_teacher_api.tutor import prep
 log = logsetup.get("live")
 router = APIRouter(prefix="/live")
 MAX_CHUNK = 64_000
+MIN_CLASS_USD = 0.60  # balance needed to start a class
 GRACE_SECONDS = 60  # an empty room stays this long, so a reload or a dropped connection can come back
 
 
@@ -32,14 +34,18 @@ class RoomIn(BaseModel):
 
 
 @router.post("/rooms")
-def create_room(body: RoomIn) -> dict:
+async def create_room(body: RoomIn, u: dict = Depends(auth.active_user)) -> dict:
+    """The signed-in, approved host creates the class and pays for it; children join with the code and need no account."""
+    await asyncio.to_thread(credits.check, u["email"])
+    if u["role"] != "admin" and credits.balance_micro(u) < round(MIN_CLASS_USD * credits.M):
+        raise credits.CreditExhausted()
     if body.lesson_id:
         try:
             prep.load_lesson(body.lesson_id)
         except FileNotFoundError:
             raise HTTPException(404, "unknown lesson") from None
     try:
-        room = new_room(body.lesson_id)
+        room = new_room(body.lesson_id, u["email"])
     except RuntimeError as e:
         raise HTTPException(429, str(e)) from e
     log.info("room-created", room=room.code, lesson=body.lesson_id)
@@ -66,6 +72,7 @@ async def _progress(room: Room, text: str) -> None:
 
 async def _run(room: Room, topic: str) -> None:
     """Planning stage first (a topic class: notes + pictures, a few minutes, children see the progress), then the live session."""
+    usage.set_user(room.owner or None)  # every model call of this class is charged to the host
     try:
         if room.lesson_id:
             instruction, pics = _instruction_and_pictures(room)
@@ -89,6 +96,9 @@ async def _run(room: Room, topic: str) -> None:
         await session.run_room(room, instruction, pics, DEFAULT_VOICE, f"{room.board_status(pics)}\n{first}")
     except asyncio.CancelledError:
         raise
+    except credits.AccessDenied as e:
+        log.warn("class-stopped-access", room=room.code, owner=room.owner, code=e.code)
+        await room.broadcast({"type": "ended", "reason": e.hi, "code": e.code})
     except Exception as e:  # noqa: BLE001
         log.error("class-failed", room=room.code, error=repr(e)[:400])
         await room.broadcast({"type": "ended", "reason": "क्लास शुरू नहीं हो सकी। फिर से कोशिश कीजिए।"})
@@ -128,6 +138,7 @@ async def ws(websocket: WebSocket, code: str, name: str = "", key: str = "") -> 
                 data = msg["bytes"]
                 if room.live and room.mic_open(mid) and len(data) <= MAX_CHUNK:
                     audio_s += len(data) / 32000
+                    room.in_audio_s += len(data) / 32000
                     await room.live.send_realtime_input(audio=types.Blob(data=data, mime_type="audio/pcm;rate=16000"))
                 continue
             ev = json.loads(msg["text"]) if msg.get("text") else {}

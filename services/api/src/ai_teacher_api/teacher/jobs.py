@@ -1,12 +1,14 @@
 """Background jobs started from the dashboard (generate a lesson, parse+plan a new chapter). One image-using job at a time (see common.workspace).
 Each job's stages and failures are logged to logs/content.jsonl with the job id, and the dashboard polls `GET /teacher/jobs/{id}`."""
 
+import contextvars
 import threading
 import time
 import traceback
 import uuid
 from collections.abc import Callable
 
+from ai_teacher_api.access import usage
 from ai_teacher_api.common import logsetup, workspace
 
 log = logsetup.get("content")
@@ -18,7 +20,7 @@ def start(kind: str, label: str, fn: Callable[[Callable[[str], None]], dict], ne
     jid = uuid.uuid4().hex[:8]
     if needs_images and not workspace.try_acquire(f"job {jid} {label}"):
         raise RuntimeError(f"busy: {workspace.holder['who']}")
-    job = {"id": jid, "kind": kind, "label": label, "status": "running", "stage": "starting", "started": time.time(), "ended": None, "error": "", "result": None}
+    job = {"id": jid, "kind": kind, "label": label, "status": "running", "stage": "starting", "started": time.time(), "ended": None, "error": "", "result": None, "owner": (usage.current() or {}).get("email")}
     JOBS[jid] = job
     log.info("job-start", job=jid, kind=kind, label=label)
 
@@ -40,7 +42,8 @@ def start(kind: str, label: str, fn: Callable[[Callable[[str], None]], dict], ne
         if status == "done":
             log.info("job-done", job=jid, seconds=round(time.time() - job["started"]), result=result)
 
-    threading.Thread(target=run, daemon=True, name=f"job-{jid}").start()
+    ctx = contextvars.copy_context()  # the signed-in user travels into the job, so model calls are charged to them
+    threading.Thread(target=ctx.run, args=(run,), daemon=True, name=f"job-{jid}").start()
     return job
 
 

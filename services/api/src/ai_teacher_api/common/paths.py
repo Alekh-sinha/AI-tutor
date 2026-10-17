@@ -15,6 +15,9 @@ NAME = re.compile(r"^[A-Za-z0-9_-]{1,40}$")
 def chapter_dir(chapter: str, must_exist: bool = True):
     if not NAME.match(chapter):
         raise HTTPException(400, "bad chapter id")
+    from ai_teacher_api.access import ownership  # lazy: access imports this module's package at start-up
+
+    ownership.require(chapter)
     d = DATA_DIR / chapter
     if must_exist and not (d / "plan.json").exists():
         raise HTTPException(404, "unknown chapter (no plan.json yet)")
@@ -27,5 +30,5 @@ def public_id(chapter: str, lesson: str) -> str:
 
 def split_public_id(pid: str) -> tuple[str, str]:
     """(chapter, lesson) of a player lesson id such as `lesson-2-v2`, `ch7-lesson-1-v2` or the classic `lesson-3`."""
-    m = re.match(r"^(?:(?P<ch>[A-Za-z0-9_]+)-)?(?P<lesson>lesson-\d+)(?:-v\d+)?$", pid)
+    m = re.match(r"^(?:(?P<ch>[A-Za-z0-9_-]+?)-)?(?P<lesson>lesson-\d+)(?:-v\d+)?$", pid)
     return (m.group("ch") or DEFAULT_CHAPTER, m.group("lesson")) if m else (DEFAULT_CHAPTER, pid)

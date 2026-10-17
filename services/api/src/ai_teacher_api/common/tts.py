@@ -9,6 +9,7 @@ import asyncio
 import sys
 
 import lameenc
+from ai_teacher_api.access import pricing, usage
 from ai_teacher_api.common.plaintext import plain
 from google.cloud import texttospeech as gt
 
@@ -23,6 +24,7 @@ def silence(seconds: float) -> bytes:
 
 
 def synth_line(client: gt.TextToSpeechClient, text: str, voice: str, language: str, speaking_rate: float) -> bytes:
+    usage.precheck()
     r = client.synthesize_speech(
         input=gt.SynthesisInput(text=plain(text)),
         voice=gt.VoiceSelectionParams(language_code=language, name=f"{language}-Chirp3-HD-{voice}"),
@@ -30,6 +32,7 @@ def synth_line(client: gt.TextToSpeechClient, text: str, voice: str, language: s
             audio_encoding=gt.AudioEncoding.LINEAR16, sample_rate_hertz=RATE, speaking_rate=speaking_rate
         ),
     )
+    usage.charge(pricing.tts_cost(len(plain(text))), "tts", f"chirp3-{voice}", f"{len(text)} chars")
     return r.audio_content[44:]  # drop the WAV header
 
 

@@ -25,6 +25,7 @@ from google.adk.sessions import InMemorySessionService
 from google.genai import types
 from pydantic import BaseModel, Field
 
+from ai_teacher_api.access import credits, ownership, usage
 from ai_teacher_api.authoring import edit_loop
 from ai_teacher_api.authoring import illustrator as ill
 from ai_teacher_api.authoring.review import lecture_checks, lecture_images
@@ -38,6 +39,8 @@ from ai_teacher_api.teacher.agent import ASKED, build_teacher_editor
 
 log = logsetup.get("teacher")
 ILLUSTRATED = DATA_DIR  # served at /files/<chapter>/illustrated/<lesson>-final/...
+MAX_USER_CHAPTERS = 5
+MIN_LESSON_USD = 3.0  # balance needed to start building a lesson video (a build costs roughly this much)
 WIDE_LINES, WIDE_PICTURES = 0.35, 4  # a change touching more than this share of the lecture's lines, or this many pictures, needs a second confirmation
 LABELS = {"view_picture": "चित्र देख रहा हूँ…", "edit_image": "चित्र बदल रहा हूँ…", "generate_image": "नया चित्र बना रहा हूँ…", "replace_text": "पाठ बदल रहा हूँ…", "ask_teacher": ""}
 
@@ -116,6 +119,9 @@ def chapters() -> list[dict]:
     out = []
     for p in sorted(DATA_DIR.glob("*/plan.json")):
         c = p.parent.name
+        u = usage.current()
+        if not ownership.can_access(c, u["email"] if u else None):
+            continue
         plan = json.loads(p.read_text())
         lessons = []
         for l in plan["lessons"]:
@@ -131,6 +137,12 @@ def chapters() -> list[dict]:
 async def upload_chapter(chapter: str = Form(...), book: str = Form(...), pdf: UploadFile = File(...)) -> dict:
     """Upload a book chapter PDF: parse it and plan its lessons (a background job). The lessons are then generated one by one from the dashboard."""
     chapter = chapter.strip()
+    u = usage.current()
+    if ownership.restricted() and u and not credits.is_admin(u["email"]):
+        chapter = ownership.prefix_for(u["email"]) + chapter[:28]  # a user's chapters carry their prefix: that is how ownership is known
+        if len([p for p in DATA_DIR.glob(ownership.prefix_for(u["email"]) + "*")]) >= MAX_USER_CHAPTERS:
+            raise HTTPException(409, f"You can keep up to {MAX_USER_CHAPTERS} chapters. Please ask the admin if you need more.")
+    await asyncio.to_thread(credits.check, u["email"]) if u else None
     if not NAME.match(chapter):
         raise HTTPException(422, "अध्याय का नाम सिर्फ़ अंग्रेज़ी अक्षर, अंक, - या _ में हो (बिना स्पेस, अधिकतम 40), जैसे ch7")
     if (DATA_DIR / chapter).exists():
@@ -168,6 +180,12 @@ def generate(lesson: str, chapter: str = DEFAULT_CHAPTER) -> dict:
 
     d = chapter_dir(chapter)
     _outline(lesson, chapter)
+    u = usage.current()
+    if u:
+        credits.check(u["email"])
+        me = credits.get(u["email"])
+        if me and me["role"] != "admin" and credits.balance_micro(me) < round(MIN_LESSON_USD * credits.M):
+            raise credits.CreditExhausted(f"Building a lesson needs about ${MIN_LESSON_USD:.0f} of credit. You have ${credits.balance_micro(me) / credits.M:.2f}. You can ask for more credit.")
     if (d / "illustrated" / f"{lesson}-final" / "lecture.md").exists():
         raise HTTPException(409, "this lesson already has a lecture: edit it, or publish it")
     pid = public_id(chapter, lesson)
@@ -186,13 +204,16 @@ def generate(lesson: str, chapter: str = DEFAULT_CHAPTER) -> dict:
 @router.get("/jobs", dependencies=[Depends(auth)])
 def running_jobs() -> list[dict]:
     """Jobs still running (the dashboard shows them again after a page refresh)."""
-    return [{**j, "elapsed": round(time.time() - j["started"])} for j in jobs.running()]
+    u = usage.current()
+    mine = [j for j in jobs.running() if not ownership.restricted() or (u and (credits.is_admin(u["email"]) or j.get("owner") == u["email"]))]
+    return [{**j, "elapsed": round(time.time() - j["started"])} for j in mine]
 
 
 @router.get("/jobs/{jid}", dependencies=[Depends(auth)])
 def job_status(jid: str) -> dict:
     j = jobs.get(jid)
-    if not j:
+    u = usage.current()
+    if not j or (ownership.restricted() and not (u and (credits.is_admin(u["email"]) or j.get("owner") == u["email"]))):
         raise HTTPException(404, "unknown job")
     return {**j, "elapsed": round((j["ended"] or time.time()) - j["started"])}
 

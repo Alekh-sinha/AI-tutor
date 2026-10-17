@@ -32,6 +32,9 @@ class Room:
     code: str
     host_key: str
     lesson_id: str = ""
+    owner: str = ""  # the signed-in host who pays for this class (empty = local development without sign-in)
+    in_audio_s: float = 0.0  # seconds of children's microphone audio sent to the teacher (billing)
+    out_audio_s: float = 0.0  # seconds of the teacher's speech (billing)
     created: float = field(default_factory=time.time)
     started: bool = False
     members: dict[str, Member] = field(default_factory=dict)
@@ -156,7 +159,7 @@ class Room:
 ROOMS: dict[str, Room] = {}
 
 
-def new_room(lesson_id: str = "") -> Room:
+def new_room(lesson_id: str = "", owner: str = "") -> Room:
     for c in [c for c, r in ROOMS.items() if r.expired() and not r.members]:
         ROOMS.pop(c)
     if len(ROOMS) >= MAX_ROOMS:
@@ -164,6 +167,6 @@ def new_room(lesson_id: str = "") -> Room:
     code = "".join(secrets.choice("0123456789") for _ in range(5))
     while code in ROOMS:
         code = "".join(secrets.choice("0123456789") for _ in range(5))
-    r = Room(code=code, host_key=secrets.token_urlsafe(12), lesson_id=lesson_id)
+    r = Room(code=code, host_key=secrets.token_urlsafe(12), lesson_id=lesson_id, owner=owner)
     ROOMS[code] = r
     return r
