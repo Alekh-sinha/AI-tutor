@@ -1,0 +1,671 @@
+{
+  "$defs": {
+    "Anim": {
+      "description": "A short effect on an element already on the board (it is a function of time, so seeking stays consistent).",
+      "properties": {
+        "type": {
+          "const": "anim",
+          "default": "anim",
+          "title": "Type",
+          "type": "string"
+        },
+        "t": {
+          "minimum": 0,
+          "title": "T",
+          "type": "number"
+        },
+        "target": {
+          "description": "id of an element already on the board",
+          "title": "Target",
+          "type": "string"
+        },
+        "effect": {
+          "enum": [
+            "pulse",
+            "shake",
+            "bounce",
+            "tick",
+            "cross",
+            "arrow",
+            "glow"
+          ],
+          "title": "Effect",
+          "type": "string"
+        },
+        "dur": {
+          "default": 1.6,
+          "exclusiveMinimum": 0,
+          "maximum": 6,
+          "title": "Dur",
+          "type": "number"
+        }
+      },
+      "required": [
+        "t",
+        "target",
+        "effect"
+      ],
+      "title": "Anim",
+      "type": "object"
+    },
+    "Choice": {
+      "description": "A question card for the student to think about (and tap). The answer is shown at `reveal_at`.",
+      "properties": {
+        "type": {
+          "const": "choice",
+          "default": "choice",
+          "title": "Type",
+          "type": "string"
+        },
+        "t": {
+          "minimum": 0,
+          "title": "T",
+          "type": "number"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "question": {
+          "title": "Question",
+          "type": "string"
+        },
+        "options": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 4,
+          "minItems": 2,
+          "title": "Options",
+          "type": "array"
+        },
+        "answer_index": {
+          "minimum": 0,
+          "title": "Answer Index",
+          "type": "integer"
+        },
+        "reveal_at": {
+          "description": "Seconds when the teacher says the answer; the card marks it then",
+          "minimum": 0,
+          "title": "Reveal At",
+          "type": "number"
+        }
+      },
+      "required": [
+        "t",
+        "id",
+        "question",
+        "options",
+        "answer_index",
+        "reveal_at"
+      ],
+      "title": "Choice",
+      "type": "object"
+    },
+    "Clear": {
+      "properties": {
+        "type": {
+          "const": "clear",
+          "default": "clear",
+          "title": "Type",
+          "type": "string"
+        },
+        "t": {
+          "minimum": 0,
+          "title": "T",
+          "type": "number"
+        }
+      },
+      "required": [
+        "t"
+      ],
+      "title": "Clear",
+      "type": "object"
+    },
+    "Equation": {
+      "properties": {
+        "type": {
+          "const": "equation",
+          "default": "equation",
+          "title": "Type",
+          "type": "string"
+        },
+        "t": {
+          "minimum": 0,
+          "title": "T",
+          "type": "number"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "latex": {
+          "title": "Latex",
+          "type": "string"
+        }
+      },
+      "required": [
+        "t",
+        "id",
+        "latex"
+      ],
+      "title": "Equation",
+      "type": "object"
+    },
+    "Hide": {
+      "description": "Remove ONE element (an old note) to make room, while the rest of the scene stays.",
+      "properties": {
+        "type": {
+          "const": "hide",
+          "default": "hide",
+          "title": "Type",
+          "type": "string"
+        },
+        "t": {
+          "minimum": 0,
+          "title": "T",
+          "type": "number"
+        },
+        "target": {
+          "title": "Target",
+          "type": "string"
+        }
+      },
+      "required": [
+        "t",
+        "target"
+      ],
+      "title": "Hide",
+      "type": "object"
+    },
+    "Highlight": {
+      "properties": {
+        "type": {
+          "const": "highlight",
+          "default": "highlight",
+          "title": "Type",
+          "type": "string"
+        },
+        "t": {
+          "minimum": 0,
+          "title": "T",
+          "type": "number"
+        },
+        "target": {
+          "description": "id of an element already on the board",
+          "title": "Target",
+          "type": "string"
+        }
+      },
+      "required": [
+        "t",
+        "target"
+      ],
+      "title": "Highlight",
+      "type": "object"
+    },
+    "HomeActivity": {
+      "properties": {
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "instructions": {
+          "description": "What to observe or do at home, using things found in a village home",
+          "title": "Instructions",
+          "type": "string"
+        },
+        "submit_as": {
+          "description": "photo | voice | both: what the student submits",
+          "title": "Submit As",
+          "type": "string"
+        },
+        "rubric": {
+          "description": "Criteria the evaluator checks; each one observable",
+          "items": {
+            "type": "string"
+          },
+          "title": "Rubric",
+          "type": "array"
+        },
+        "source_activity": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Textbook activity id adapted, e.g. 6.1",
+          "title": "Source Activity"
+        }
+      },
+      "required": [
+        "title",
+        "instructions",
+        "submit_as",
+        "rubric"
+      ],
+      "title": "HomeActivity",
+      "type": "object"
+    },
+    "Image": {
+      "properties": {
+        "type": {
+          "const": "image",
+          "default": "image",
+          "title": "Type",
+          "type": "string"
+        },
+        "t": {
+          "minimum": 0,
+          "title": "T",
+          "type": "number"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "src": {
+          "title": "Src",
+          "type": "string"
+        },
+        "caption": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Caption"
+        }
+      },
+      "required": [
+        "t",
+        "id",
+        "src"
+      ],
+      "title": "Image",
+      "type": "object"
+    },
+    "Label": {
+      "description": "A word or phrase drawn by the player (HTML, real font) on top of an image. Positions are percentages.",
+      "properties": {
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "x": {
+          "description": "Centre, % of the image width",
+          "maximum": 100,
+          "minimum": 0,
+          "title": "X",
+          "type": "number"
+        },
+        "y": {
+          "description": "Centre, % of the image height",
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Y",
+          "type": "number"
+        },
+        "size": {
+          "default": 4.6,
+          "description": "Font size as % of the image width",
+          "exclusiveMinimum": 0,
+          "maximum": 15,
+          "title": "Size",
+          "type": "number"
+        },
+        "color": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "CSS hex colour, default dark ink",
+          "title": "Color"
+        },
+        "bold": {
+          "default": false,
+          "title": "Bold",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "text",
+        "x",
+        "y"
+      ],
+      "title": "Label",
+      "type": "object"
+    },
+    "NarrationLine": {
+      "properties": {
+        "start": {
+          "minimum": 0,
+          "title": "Start",
+          "type": "number"
+        },
+        "end": {
+          "minimum": 0,
+          "title": "End",
+          "type": "number"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "start",
+        "end",
+        "text"
+      ],
+      "title": "NarrationLine",
+      "type": "object"
+    },
+    "Note": {
+      "properties": {
+        "type": {
+          "const": "note",
+          "default": "note",
+          "title": "Type",
+          "type": "string"
+        },
+        "t": {
+          "description": "Seconds from lesson start",
+          "minimum": 0,
+          "title": "T",
+          "type": "number"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "style": {
+          "default": "body",
+          "enum": [
+            "heading",
+            "body",
+            "bullet",
+            "key"
+          ],
+          "title": "Style",
+          "type": "string"
+        }
+      },
+      "required": [
+        "t",
+        "id",
+        "text"
+      ],
+      "title": "Note",
+      "type": "object"
+    },
+    "QuizQuestion": {
+      "properties": {
+        "question": {
+          "title": "Question",
+          "type": "string"
+        },
+        "options": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 4,
+          "minItems": 3,
+          "title": "Options",
+          "type": "array"
+        },
+        "answer_index": {
+          "title": "Answer Index",
+          "type": "integer"
+        },
+        "explanation": {
+          "title": "Explanation",
+          "type": "string"
+        }
+      },
+      "required": [
+        "question",
+        "options",
+        "answer_index",
+        "explanation"
+      ],
+      "title": "QuizQuestion",
+      "type": "object"
+    },
+    "Source": {
+      "description": "Where in the textbook a claim comes from (used for teacher review).",
+      "properties": {
+        "book": {
+          "title": "Book",
+          "type": "string"
+        },
+        "page": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Page"
+        },
+        "section": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Section"
+        }
+      },
+      "required": [
+        "book"
+      ],
+      "title": "Source",
+      "type": "object"
+    },
+    "Svg": {
+      "properties": {
+        "type": {
+          "const": "svg",
+          "default": "svg",
+          "title": "Type",
+          "type": "string"
+        },
+        "t": {
+          "minimum": 0,
+          "title": "T",
+          "type": "number"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "markup": {
+          "description": "Inline SVG with NO text; sanitised before rendering",
+          "title": "Markup",
+          "type": "string"
+        },
+        "labels": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Label"
+          },
+          "title": "Labels",
+          "type": "array"
+        },
+        "caption": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Caption"
+        }
+      },
+      "required": [
+        "t",
+        "id",
+        "markup"
+      ],
+      "title": "Svg",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "title": {
+      "title": "Title",
+      "type": "string"
+    },
+    "language": {
+      "description": "BCP-47, e.g. hi-IN",
+      "title": "Language",
+      "type": "string"
+    },
+    "duration": {
+      "description": "Seconds; lessons are max 10 min",
+      "exclusiveMinimum": 0,
+      "maximum": 600,
+      "title": "Duration",
+      "type": "number"
+    },
+    "audio": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Single narration track; None = silent preview",
+      "title": "Audio"
+    },
+    "narration": {
+      "items": {
+        "$ref": "#/$defs/NarrationLine"
+      },
+      "title": "Narration",
+      "type": "array"
+    },
+    "events": {
+      "items": {
+        "discriminator": {
+          "mapping": {
+            "anim": "#/$defs/Anim",
+            "choice": "#/$defs/Choice",
+            "clear": "#/$defs/Clear",
+            "equation": "#/$defs/Equation",
+            "hide": "#/$defs/Hide",
+            "highlight": "#/$defs/Highlight",
+            "image": "#/$defs/Image",
+            "note": "#/$defs/Note",
+            "svg": "#/$defs/Svg"
+          },
+          "propertyName": "type"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/Note"
+          },
+          {
+            "$ref": "#/$defs/Image"
+          },
+          {
+            "$ref": "#/$defs/Svg"
+          },
+          {
+            "$ref": "#/$defs/Equation"
+          },
+          {
+            "$ref": "#/$defs/Highlight"
+          },
+          {
+            "$ref": "#/$defs/Clear"
+          },
+          {
+            "$ref": "#/$defs/Hide"
+          },
+          {
+            "$ref": "#/$defs/Choice"
+          },
+          {
+            "$ref": "#/$defs/Anim"
+          }
+        ]
+      },
+      "title": "Events",
+      "type": "array"
+    },
+    "sources": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Source"
+      },
+      "title": "Sources",
+      "type": "array"
+    },
+    "quiz": {
+      "default": [],
+      "description": "End-of-lesson quiz, shown after the timeline ends",
+      "items": {
+        "$ref": "#/$defs/QuizQuestion"
+      },
+      "title": "Quiz",
+      "type": "array"
+    },
+    "activity": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/HomeActivity"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  "required": [
+    "id",
+    "title",
+    "language",
+    "duration",
+    "narration",
+    "events"
+  ],
+  "title": "Lesson",
+  "type": "object"
+}

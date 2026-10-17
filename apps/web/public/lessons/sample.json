@@ -1,0 +1,35 @@
+{
+  "id": "sample-photosynthesis",
+  "title": "पौधे अपना भोजन कैसे बनाते हैं?",
+  "language": "hi-IN",
+  "duration": 54,
+  "audio": null,
+  "narration": [
+    { "start": 0, "end": 6, "text": "नमस्ते बच्चो! आज हम जानेंगे कि पौधे अपना भोजन कैसे बनाते हैं।" },
+    { "start": 6, "end": 15, "text": "हम और आप भूख लगने पर खाना खाते हैं, लेकिन पौधे खाना कहाँ से लाते हैं?" },
+    { "start": 15, "end": 27, "text": "पौधे अपना भोजन खुद बनाते हैं। इसके लिए उन्हें तीन चीज़ें चाहिए: सूरज की रोशनी, पानी और हवा से कार्बन डाइऑक्साइड।" },
+    { "start": 27, "end": 40, "text": "पत्तियों में हरा पदार्थ होता है, जिसे क्लोरोफिल कहते हैं। यह सूरज की रोशनी को पकड़ लेता है।" },
+    { "start": 40, "end": 54, "text": "इस क्रिया को प्रकाश संश्लेषण कहते हैं। इससे पौधे को भोजन मिलता है और हमें साँस लेने के लिए ऑक्सीजन।" }
+  ],
+  "events": [
+    { "type": "note", "t": 0.5, "id": "title", "text": "प्रकाश संश्लेषण", "style": "heading" },
+    { "type": "note", "t": 8, "id": "q", "text": "पौधे भोजन कहाँ से लाते हैं?", "style": "key" },
+    { "type": "clear", "t": 15 },
+    { "type": "note", "t": 15.5, "id": "h2", "text": "भोजन बनाने के लिए चाहिए:", "style": "heading" },
+    { "type": "note", "t": 19, "id": "b1", "text": "☀️ सूरज की रोशनी", "style": "bullet" },
+    { "type": "note", "t": 21.5, "id": "b2", "text": "💧 पानी", "style": "bullet" },
+    { "type": "note", "t": 23.5, "id": "b3", "text": "🌬️ कार्बन डाइऑक्साइड", "style": "bullet" },
+    { "type": "clear", "t": 27 },
+    {
+      "type": "svg", "t": 27.5, "id": "leaf",
+      "caption": "पत्ती में क्लोरोफिल",
+      "markup": "<svg viewBox='0 0 300 180' xmlns='http://www.w3.org/2000/svg'><circle cx='50' cy='40' r='22' fill='#f5b301'/><g stroke='#f5b301' stroke-width='3'><line x1='50' y1='6' x2='50' y2='0'/><line x1='84' y1='40' x2='92' y2='40'/><line x1='74' y1='64' x2='80' y2='70'/></g><path d='M120 150 C120 60 220 30 260 40 C260 110 200 160 120 150Z' fill='#3a9a3a'/><path d='M120 150 L240 60' stroke='#1f6b1f' stroke-width='3' fill='none'/><text x='150' y='175' font-size='14' fill='#333'>क्लोरोफिल (हरा)</text></svg>"
+    },
+    { "type": "highlight", "t": 33, "target": "leaf" },
+    { "type": "clear", "t": 40 },
+    { "type": "note", "t": 40.5, "id": "h3", "text": "प्रकाश संश्लेषण", "style": "heading" },
+    { "type": "equation", "t": 44, "id": "eq", "latex": "\\text{CO}_2 + \\text{H}_2\\text{O} \\xrightarrow{\\text{रोशनी}} \\text{भोजन} + \\text{O}_2" },
+    { "type": "note", "t": 49, "id": "o2", "text": "हमें मिलती है ऑक्सीजन 🌿", "style": "key" }
+  ],
+  "sources": [{ "book": "placeholder (sample lesson, not from NCERT PDF)" }]
+}

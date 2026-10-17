@@ -1,0 +1,40 @@
+[project]
+name = "ai-teacher-api"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Alekh Sinha", email = "alekh.sinha09@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.141.1",
+    "google-adk>=2.11.0",
+    "google-cloud-texttospeech>=2.38.0",
+    "lameenc>=1.8.4",
+    "langfuse>=4.15.6",
+    "liteparse>=2.15.1",
+    "openinference-instrumentation-google-adk>=1.0.4",
+    "pillow>=12.3.0",
+    "pydantic>=2.14.1",
+    "python-multipart>=0.0.32",
+    "resvg-py>=0.5.0",
+    "uvicorn[standard]>=0.54.0",
+]
+
+[project.scripts]
+ai-teacher-api = "ai_teacher_api:main"
+
+[build-system]
+requires = ["uv_build>=0.12.13,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

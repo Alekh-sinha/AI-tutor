@@ -1,0 +1,13 @@
+*.log
+*.pyc
+.env
+.venv/
+__pycache__/
+apps/web/public/audio/
+apps/web/public/chat/
+apps/web/public/img/
+data/
+dist/
+logs/
+node_modules/
+services/api/.env
