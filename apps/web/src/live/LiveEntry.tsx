@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Icon } from "../ss/icons";
 import { LiveRoom } from "./LiveRoom";
 
 /** Create a class (as host) or join one with its code; then show the room. Host keys live in sessionStorage only. */
@@ -27,20 +28,24 @@ export function LiveEntry({ lessonId, joinCode }: { lessonId: string; joinCode: 
   };
 
   if (entered) return <LiveRoom code={code} name={name} hostKey={hostKey} onLeave={leave} />;
+  const hosting = joinCode === "" && lessonId !== "join";
   return (
-    <div className="lr lr-center">
-      <h1 className="lesson-title">🎓 लाइव क्लास</h1>
-      <input className="lr-input" placeholder="आपका नाम" value={name} maxLength={20} onChange={(e) => setName(e.target.value)} />
-      {joinCode === "" && lessonId !== "join" ? (
-        <button className="lr-btn primary" onClick={create}>{lessonId ? "इस पाठ की लाइव क्लास शुरू करें" : "नई कक्षा बनाएँ (होस्ट)"}</button>
-      ) : (
-        <>
-          <input className="lr-input" inputMode="numeric" placeholder="कक्षा कोड (5 अंक)" value={code} maxLength={5} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} />
-          <button className="lr-btn primary" disabled={code.length !== 5} onClick={join}>कक्षा में जुड़ें</button>
-        </>
-      )}
-      {err && <p className="t-warn">{err}</p>}
-      <a className="lr-link" href="/">← सभी पाठ</a>
+    <div className="lv lv-center">
+      <div className="card panel lv-entry">
+        <span className="mark hi">सा</span>
+        <h2 className="hi">🎓 लाइव क्लास</h2>
+        <input placeholder="आपका नाम" value={name} maxLength={20} onChange={(e) => setName(e.target.value)} />
+        {hosting ? (
+          <button className="btn pri" onClick={create}>{lessonId ? "इस पाठ की लाइव क्लास शुरू करें" : "नई कक्षा बनाएँ (होस्ट)"}</button>
+        ) : (
+          <>
+            <input inputMode="numeric" placeholder="कक्षा कोड (5 अंक)" value={code} maxLength={5} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} />
+            <button className="btn pri" disabled={code.length !== 5} onClick={join}>कक्षा में जुड़ें <Icon n="arrow" sm /></button>
+          </>
+        )}
+        {err && <p className="t-warn">{err}</p>}
+        <a className="lv-link" href="/">← वापस</a>
+      </div>
     </div>
   );
 }

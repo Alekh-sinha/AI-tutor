@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Board } from "../player/Board";
 import type { BoardElement } from "../player/board";
+import { Icon } from "../ss/icons";
 import { useLiveRoom, type BoardEl } from "./useLiveRoom";
 
 /** The board is exactly what the server's board holds (ONE screen: the teacher's show_screen replaces it): heading first, then the picture or figure, then the key words. */
@@ -16,72 +17,92 @@ function subtitle(text: string): string {
   return parts.slice(-1).join(" ").slice(-160);
 }
 
-/** The streaming live class screen: the teacher talks (voice + captions), writes on the board, asks a question and waits; children raise hands, the child with the floor answers by voice or text. */
+const COLORS = ["#fb923c", "#10a37f", "#8b5cf6", "#3b82f6", "#ec4899", "#14b8a6"];
+
+/** The streaming live class screen, in the design of the app (same tokens and components as every other page): the teacher talks (voice + captions), writes on the board, asks a question and waits;
+ *  children press "speak" to answer or to ask their own doubt. Only buttons that work are shown. */
 export function LiveRoom({ code, name, hostKey, onLeave }: { code: string; name: string; hostKey: string; onLeave: () => void }) {
   const r = useLiveRoom(code, name, hostKey);
   const [unlocked, setUnlocked] = useState(false);
   const [topic, setTopic] = useState(() => { try { return sessionStorage.getItem(`topic-${code}`) ?? ""; } catch { return ""; } });
   const [text, setText] = useState("");
-    const listen = async () => { await r.unlock(); setUnlocked(true); };
+  const listen = async () => { await r.unlock(); setUnlocked(true); };
+  const n = r.state.members.length;
 
   if (r.ended) return (
-    <div className="lr lr-center"><h2>{r.ended}</h2><button className="lr-btn primary" onClick={onLeave}>← वापस</button></div>
+    <div className="lv lv-center card"><h2>{r.ended}</h2><button className="btn pri" onClick={onLeave}><Icon n="back" sm /> वापस</button></div>
   );
+  const lastHeard = r.heard[r.heard.length - 1];
+  const waitingOther = !!r.state.floor && r.state.floor !== r.me.id && !r.solo;
   return (
-    <div className="lr">
-      <header className="lr-top">
-        <span className="lr-code" title="यह कोड दूसरे बच्चों को बताइए">कक्षा कोड <b>{code}</b></span>
-        <span className="lr-people">👥 {r.state.members.length}</span>
-        <button className="lr-x" onClick={onLeave} aria-label="बाहर निकलें">✕</button>
+    <div className="lv">
+      <header className="lv-head">
+        <button className="iconbtn" onClick={onLeave} aria-label="बाहर निकलें"><Icon n="back" sm /></button>
+        <div className="lv-title"><h2 className="hi">{r.state.started ? "लाइव क्लास" : "कक्षा की तैयारी"}</h2><span>{n} {n === 1 ? "बच्चा" : "बच्चे"} जुड़े हैं</span></div>
+        <span className="code" title="यह कोड दूसरे बच्चों को बताइए"><Icon n="users" sm /> {code}</span>
       </header>
 
       {!r.state.started ? (
-        <div className="lr-wait">
-          <div className="lr-codecard"><small>यह कोड दोस्तों को बताइए</small><b>{code}</b></div>
-          <p className="lr-big">{r.me.host ? "सब बच्चे जुड़ जाएँ, फिर कक्षा शुरू कीजिए" : "होस्ट के कक्षा शुरू करने का इंतज़ार…"}</p>
-          <ul className="lr-members">{r.state.members.map((m) => <li key={m.id}>{m.host ? "👩‍🏫" : "🧒"} {m.name}</li>)}</ul>
+        <div className="card panel lv-wait">
+          <div className="lv-codecard"><small>यह कोड दोस्तों को बताइए</small><b>{code}</b></div>
+          <p className="lv-big hi">{r.me.host ? "सब बच्चे जुड़ जाएँ, फिर कक्षा शुरू कीजिए" : "होस्ट के कक्षा शुरू करने का इंतज़ार…"}</p>
+          <div className="lv-people">{r.state.members.map((m, i) => <span className="person" key={m.id}><span className="av" style={{ background: COLORS[i % COLORS.length] }}>{m.name.slice(0, 1)}</span>{m.name}{m.host && <span className="tag">होस्ट</span>}</span>)}</div>
           {r.me.host && (
-            <>
-              <input className="lr-input" placeholder="आज क्या सीखना है? (खाली छोड़ें तो टीचर बच्चों से पूछेंगी)" value={topic} maxLength={200} onChange={(e) => setTopic(e.target.value)} />
-              <button className="lr-btn primary" disabled={!r.connected} onClick={async () => { await listen(); r.start(topic); }}>▶ कक्षा शुरू करें</button>
-            </>
+            <div className="askbox lv-start">
+              <input placeholder="आज क्या सीखना है? (खाली छोड़ें तो टीचर बच्चों से पूछेंगी)" value={topic} maxLength={200} onChange={(e) => setTopic(e.target.value)} />
+              <button className="btn pri" disabled={!r.connected} onClick={async () => { await listen(); r.start(topic); }}><Icon n="play" sm /> कक्षा शुरू करें</button>
+            </div>
           )}
-          {!r.me.host && !unlocked && <button className="lr-btn" onClick={listen}>🔊 आवाज़ चालू करें</button>}
+          {!r.me.host && !unlocked && <button className="btn" onClick={listen}>🔊 आवाज़ चालू करें</button>}
         </div>
       ) : (
         <>
-          {!unlocked && <button className="lr-btn primary lr-unlock" onClick={listen}>🔊 टीचर को सुनने के लिए यहाँ दबाइए</button>}
-          {r.state.plan.length > 0 && <ol className="lr-steps">{r.state.plan.map((st, i) => <li key={i}>{st.replace(/^\d+[.)]\s*/, "")}</li>)}</ol>}
-          <div className="lr-stage">
-            <div className={`lr-teacher ${r.speaking ? "talking" : ""}`} aria-hidden>👩‍🏫{r.speaking && <span className="lr-wave"><i /><i /><i /><i /></span>}</div>
-            <div className="lr-board">
-              <Board state={{ elements: scene(r.board).map((e) => e as unknown as BoardElement), highlighted: null, anims: {} }} time={0} />
+          {!unlocked && <button className="btn pri lv-unlock" onClick={listen}>🔊 टीचर को सुनने के लिए यहाँ दबाइए</button>}
+          <div className="stage lv-stage">
+            <div className="lv-board">
+              <div className="lv-teacher">
+                <div className="tav">👩‍🏫</div>
+                <div><b>दीदी (AI टीचर)</b><div className="lv-state">{r.speaking ? "बोल रही हैं…" : r.status ? "तैयारी कर रही हैं…" : "आपकी बारी का इंतज़ार…"}</div></div>
+                {r.speaking && <div className="eq"><i /><i /><i /><i /></div>}
+              </div>
+              <div className="lv-bwrap">
+                <Board state={{ elements: scene(r.board).map((e) => e as unknown as BoardElement), highlighted: null, anims: {} }} time={0} />
+              </div>
+              {r.question && <div className="qban"><Icon n="msg" sm /> {r.question}</div>}
+              <p className="cap">{subtitle(r.caption) || (r.status ? `⏳ ${r.status}` : "…")}</p>
+              {r.status && r.caption && <p className="lv-status">⏳ {r.status}</p>}
             </div>
-          </div>
-          {r.question && <p className="lr-question">❓ {r.question}</p>}
-          <p className="lr-caption">{subtitle(r.caption) || (r.status ? `⏳ ${r.status}` : "…")}</p>
-          {r.status && r.caption && <p className="lr-status">⏳ {r.status}</p>}
-          {r.heard.length > 0 && <p className="lr-heard">🧒 {r.heard[r.heard.length - 1].name}: {r.heard[r.heard.length - 1].text}</p>}
-          {r.state.finished && <p className="lr-done">🎓 क्लास पूरी हुई — अब आप टीचर से बात करके कोई भी सवाल पूछ सकते हैं।</p>}
-          <div className="lr-controls">
-            <div className="lr-mine">
-              {!r.talking ? (
-                <button className="lr-btn primary lr-talk" disabled={!!r.state.floor && r.state.floor !== r.me.id && !r.solo} onClick={r.talk}>🎤 बोलिए</button>
-              ) : (
-                <div className="lr-row">
-                  <p className="lr-mic">🔴 सुन रही हूँ… बोलिए</p>
-                  <button className="lr-btn primary" onClick={r.done}>✔ बोल दिया</button>
+
+            <div className="lv-side">
+              <div className="card panel lv-ctrl">
+                {!r.talking ? (
+                  <button className="btn pri ptt" disabled={waitingOther} onClick={r.talk}><Icon n="mic" /> बोलिए</button>
+                ) : (
+                  <div className="lv-talking">
+                    <p className="lv-mic">🔴 सुन रही हूँ… बोलिए</p>
+                    <button className="btn pri ptt" onClick={r.done}><Icon n="check" /> बोल दिया</button>
+                  </div>
+                )}
+                <div className="chatin">
+                  <input placeholder="या यहाँ लिखिए…" value={text} maxLength={300} onChange={(e) => setText(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter" && text.trim()) { r.say(text.trim()); setText(""); } }} />
+                  <button className="iconbtn pri" aria-label="भेजिए" disabled={!text.trim()} onClick={() => { r.say(text.trim()); setText(""); }}><Icon n="send" sm /></button>
+                </div>
+                {waitingOther && <p className="lv-hint">🎤 अभी बोल रहे हैं: {r.state.floor_name}</p>}
+                {lastHeard && <p className="lv-heard">🧒 {lastHeard.name}: {lastHeard.text}</p>}
+                {r.me.host && <button className="btn" onClick={r.next} disabled={r.state.teacher_busy}><Icon n="arrow" sm /> आगे बढ़िए</button>}
+              </div>
+              {r.state.finished && <div className="note-bar lv-done"><span>🎓 क्लास पूरी हुई — अब आप टीचर से बात करके कोई भी सवाल पूछ सकते हैं।</span></div>}
+              {r.state.plan.length > 0 && (
+                <div className="card panel lv-plan"><h3>आज की कक्षा</h3>
+                  {r.state.plan.map((st, i) => <div className="step" key={i}><b>{i + 1}</b><span className="hi">{st.replace(/^\d+[.)]\s*/, "")}</span></div>)}
                 </div>
               )}
-              <input className="lr-input" placeholder="या यहाँ लिखिए…" value={text} maxLength={300} onChange={(e) => setText(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter" && text.trim()) { r.say(text.trim()); setText(""); } }} />
-            </div>
-            {r.state.floor && r.state.floor !== r.me.id && !r.solo && <p className="lr-floor">🎤 अभी बोल रहे हैं: {r.state.floor_name}</p>}
-            {r.me.host && (
-              <div className="lr-host">
-                <button className="lr-btn" onClick={r.next} disabled={r.state.teacher_busy}>▶ आगे बढ़िए</button>
+              <div className="card panel lv-members"><h3>कक्षा में</h3>
+                <div className="person"><span className="av" style={{ background: "#fb923c" }}>दी</span>दीदी <span className="tag" style={{ marginLeft: "auto" }}>टीचर</span></div>
+                {r.state.members.map((m, i) => <div className="person" key={m.id}><span className="av" style={{ background: COLORS[(i + 1) % COLORS.length] }}>{m.name.slice(0, 1)}</span>{m.name}{m.id === r.me.id && <span className="tag" style={{ marginLeft: "auto" }}>आप</span>}</div>)}
               </div>
-            )}
+            </div>
           </div>
         </>
       )}

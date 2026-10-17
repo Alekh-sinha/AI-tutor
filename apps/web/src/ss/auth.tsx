@@ -7,9 +7,9 @@ export interface Me {
   balance_usd?: number; spent_usd?: number; today_usd?: number; daily_cap_usd?: number; unlimited?: boolean;
   open_requests?: { id: string; type: string; created: number }[];
   recent_decisions?: { type: string; status: string; usd: number; decided: number }[];
-  review_note?: string; review_note_hi?: string;
+  review_note?: string; review_note_hi?: string; contact_email?: string;
 }
-export interface AuthConfig { auth_mode: string; google_client_id: string; dev_login: boolean; review_note: string; review_note_hi: string }
+export interface AuthConfig { auth_mode: string; google_client_id: string; dev_login: boolean; review_note: string; review_note_hi: string; contact_email?: string }
 
 interface Ctx { me: Me | null; config: AuthConfig | null; reload: () => Promise<void> }
 const MeContext = createContext<Ctx>({ me: null, config: null, reload: async () => undefined });

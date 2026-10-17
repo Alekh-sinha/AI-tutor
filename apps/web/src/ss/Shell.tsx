@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { api, usd, watchAccessErrors } from "./api";
 import { RequestBox } from "./Gate";
 import { Icon } from "./icons";
+import { AccessNotice } from "./AccessNotice";
 import { SignIn, useMe } from "./auth";
 
 export type NavKey = "home" | "lessons" | "live" | "teacher" | "admin" | "";
@@ -91,7 +92,7 @@ export function Shell({ active, children }: { active: NavKey; children: ReactNod
             </div>
           </div>
         )}
-        <main className="page">{children}</main>
+        <main className="page"><AccessNotice />{children}</main>
       </div>
       <nav className="mtab">
         {items.map((n) => <a key={n.key} href={n.href} className={n.key === active ? "on" : ""}><Icon n={n.icon} />{n.label.replace("Teacher dashboard", "Teacher").replace("Live Classes", "Live")}</a>)}

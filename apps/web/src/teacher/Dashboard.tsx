@@ -103,7 +103,7 @@ function ChapterDetail({ c, jobs, nav, onJob, reload }: { c: ChapterInfo; jobs: 
               const go = (w: string) => nav({ chapter: c.id, lesson: l.id, w });
               return (
                 <tr key={l.id}>
-                  <td className="c-ttl"><div className="ttl"><div className={`thumb t${(i % 4) + 1}`}>{["🏺", "🪟", "🧺", "🧂"][i % 4]}</div><div><b className="hi">{i + 1}. {l.title}</b>{job?.status === "running" && <><div className="prog" style={{ width: 200 }}><i /></div><small>{job.stage} · {Math.floor(job.elapsed / 60)} min</small></>}</div></div></td>
+                  <td className="c-ttl"><div className="ttl"><div className={`thumb t${(i % 4) + 1}`}>{["🏺", "🪟", "🧺", "🧂"][i % 4]}</div><div><b className="hi">{i + 1}. {l.title}</b>{job?.status === "running" && <div className="job-wait mini"><span className="spin sm" aria-hidden /><small>Generating — about 20–30 minutes. You can explore other sections meanwhile.</small></div>}</div></div></td>
                   <td className="c-st"><span className={`chip ${st.cls}`}>{st.text}</span>{l.draft && <div style={{ marginTop: 5 }}><span className="chip rev" style={{ fontSize: 12, padding: "2px 9px" }}>Draft v{l.version + 1} · not live</span></div>}</td>
                   <td className="c-act">
                     {l.has_lecture ? (

@@ -138,16 +138,18 @@ export function JobBox({ job, onDone }: { job: Job; onDone: () => void }) {
     }, 4000);
     return () => clearInterval(t);
   }, [job.id]); // eslint-disable-line react-hooks/exhaustive-deps
-  const mins = Math.floor(j.elapsed / 60);
   const lessons = j.result?.lessons;
-  const done = typeof j.result?.public_id === "string" ? "✓ वीडियो बन गया (नीचे बटन से देखिए)"
-    : typeof lessons === "number" ? `✓ अध्याय पढ़ लिया: ${lessons} पाठ तय हुए। वीडियो अभी नहीं बने — हर पाठ के आगे "⚙ वीडियो बनाएँ" दबाइए (हर वीडियो में लगभग 20-30 मिनट लगते हैं)।`
-    : "✓ पूरा हुआ";
+  const done = typeof j.result?.public_id === "string" ? "✓ The video is ready — watch it with the button below."
+    : typeof lessons === "number" ? `✓ Chapter read: ${lessons} lessons planned. The videos are not made yet — press Generate next to a lesson (each video takes about 20–30 minutes).`
+    : "✓ Done";
+  const eta = j.label.includes("/") ? "about 20–30 minutes" : "a minute or two";
   return (
     <div className="t-box">
       <b>{j.label}</b>
-      <p>{j.status === "running" ? `⏳ ${j.stage} — ${mins} मिनट` : j.status === "done" ? done : `⚠️ ${j.error}`}</p>
-      {j.status === "done" && typeof j.result?.public_id === "string" && <p><a className="t-btn ok" href={`/?lesson=${j.result.public_id}`} target="_blank" rel="noreferrer">▶ वीडियो देखें</a></p>}
+      {j.status === "running"
+        ? <div className="job-wait"><span className="spin" aria-hidden /><p>Your result will be generated soon. Meanwhile you can explore the other sections. It takes {eta}.</p></div>
+        : <p>{j.status === "done" ? done : `⚠️ ${j.error}`}</p>}
+      {j.status === "done" && typeof j.result?.public_id === "string" && <p><a className="t-btn ok" href={`/?lesson=${j.result.public_id}`} target="_blank" rel="noreferrer">▶ Watch the video</a></p>}
     </div>
   );
 }

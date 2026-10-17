@@ -1,81 +1,66 @@
-/* streaming live class — uses the tokens of App.css */
-.lr { position: fixed; inset: 0; z-index: 20; background: radial-gradient(900px 380px at 50% -140px, #ffe6b8 0%, transparent 70%), var(--bg); display: flex; flex-direction: column; max-width: 900px; margin: 0 auto; padding: 0 16px 12px; box-sizing: border-box; overflow-y: auto; }
-.lr-center { align-items: center; justify-content: center; gap: 14px; text-align: center; }
-.lr-center .lesson-title { font-size: 1.7rem; color: var(--ink); font-weight: 800; }
-.lr-top { display: flex; align-items: center; gap: 10px; padding: 12px 0; }
-.lr-code { font-size: 1rem; background: var(--card); padding: 6px 14px; border-radius: 18px; box-shadow: var(--shadow-sm); }
-.lr-code b { letter-spacing: .18em; font-size: 1.3rem; color: var(--indigo); }
-.lr-people { margin-left: auto; font-size: 1rem; background: var(--teal-soft); color: var(--teal); padding: 6px 12px; border-radius: 16px; font-weight: 700; }
-.lr-x { border: 0; background: var(--card); box-shadow: var(--shadow-sm); width: 42px; height: 42px; border-radius: 50%; font-size: 1.1rem; }
-.lr-wait { display: flex; flex-direction: column; gap: 16px; align-items: center; padding-top: 28px; }
-.lr-big { font-size: 1.35rem; text-align: center; font-weight: 700; margin: 0; }
-.lr-members { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
-.lr-members li { background: var(--card); border-radius: 18px; padding: 8px 16px; box-shadow: var(--shadow-sm); font-weight: 600; font-size: 1.05rem; animation: pop .3s; }
-.lr-input { font: inherit; font-size: 1.1rem; padding: 14px 18px; border-radius: 28px; border: 2px solid var(--line); background: var(--card); min-width: 0; flex: 1; width: 100%; max-width: 440px; box-sizing: border-box; }
-.lr-btn { font: inherit; font-size: 1.1rem; font-weight: 700; padding: 13px 26px; border-radius: 28px; border: 2px solid var(--indigo-soft); background: var(--card); color: var(--indigo); box-shadow: var(--shadow-sm); }
-.lr-btn.primary { background: var(--grad); color: #fff; border-color: transparent; box-shadow: 0 6px 16px rgba(249, 115, 22, .4); }
-.lr-btn:disabled { opacity: .5; }
-.lr-unlock { align-self: center; margin: 6px 0; animation: glowbtn 1.6s ease-in-out infinite; }  /* glows, never moves: a moving button is hard to tap */
-@keyframes glowbtn { 50% { box-shadow: 0 0 0 10px rgba(249, 115, 22, .18), 0 6px 16px rgba(249, 115, 22, .4); } }
-.lr-stage { position: relative; flex: 1 1 0; min-height: 44vh; display: flex; }  /* the board gets all the room that is left */
-.lr-teacher { position: absolute; top: -10px; left: -6px; z-index: 3; font-size: 1.7rem; width: 48px; height: 48px; flex: none; display: grid; place-items: center; border-radius: 50%; background: var(--brand-soft); border: 3px solid #fff; box-shadow: var(--shadow-sm); position: relative; }
-.lr-teacher.talking { animation: ring 1.1s ease-out infinite; }
-@keyframes ring { 0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, .55); } 100% { box-shadow: 0 0 0 16px rgba(245, 158, 11, 0); } }
-.lr-wave { position: absolute; bottom: -8px; left: 50%; transform: translateX(-50%); display: flex; gap: 3px; align-items: flex-end; height: 18px; background: #fff; padding: 3px 7px; border-radius: 10px; box-shadow: var(--shadow-sm); }
-.lr-wave i { width: 4px; height: 100%; background: var(--brand-2); border-radius: 2px; animation: eq .8s ease-in-out infinite alternate; transform-origin: bottom; }
-.lr-wave i:nth-child(2) { animation-delay: .15s; } .lr-wave i:nth-child(3) { animation-delay: .3s; } .lr-wave i:nth-child(4) { animation-delay: .45s; }
-@keyframes eq { from { transform: scaleY(.25); } to { transform: scaleY(1); } }
-.lr-board { flex: 1; min-width: 0; display: flex; }
-.lr-board .board { flex: 1; min-height: 0; padding: 14px 10px; }
-.lr-board figure img { max-height: 40vh; }
-.lr-board .note-heading { font-size: 1.45rem; } .lr-board .note-body { font-size: 1.1rem; } .lr-board .note-key { font-size: 1.2rem; } .lr-board .note-bullet { font-size: 1.1rem; }
+/* Live class screens. They use the tokens and components of ui.css (the approved design: same colours, cards, buttons and type as every other page); only the layout of the room is defined here. */
+.ss .lv { max-width: 1180px; margin: 0 auto; padding: 18px 20px 28px; box-sizing: border-box; }
+.ss .lv-center { min-height: 100vh; display: grid; place-items: center; }
+.ss .lv-head { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
+.ss .lv-title { flex: 1; min-width: 0; }
+.ss .lv-title h2 { margin: 0; font-size: 20px; }
+.ss .lv-title span { color: var(--muted); font-size: 14px; }
 
-.lr-plan { margin: 8px 0 0; padding: 8px 14px 8px 34px; color: var(--muted); font-size: .92rem; background: var(--card); border-radius: 16px; border: 1px solid var(--line); }
-.lr-caption { margin: 8px 0; padding: 8px 14px; font-size: .98rem; line-height: 1.5; min-height: 2.6em; background: var(--card); border-radius: 20px; border: 1px solid var(--line); box-shadow: var(--shadow-sm); }
-.lr-status { color: var(--brand-ink); font-weight: 700; margin: 0; animation: blink 1.2s infinite; }
-.lr-heard { margin: 4px 0; padding: 8px 14px; background: var(--indigo-soft); border-radius: 16px; }
-.lr-controls { margin-top: auto; display: flex; flex-direction: column; gap: 10px; align-items: stretch; padding-top: 8px; }
-.lr-controls > .lr-btn { align-self: center; }
-.lr-mine { background: var(--ok-soft); border: 2px solid var(--ok); border-radius: 22px; padding: 12px 14px; }
-.lr-mic { margin: 0 0 8px; font-size: 1.2rem; font-weight: 800; color: var(--ok); animation: blink 1.2s infinite; }
-.lr-row { display: flex; gap: 8px; align-items: center; }
-.lr-floor { margin: 0; color: var(--muted); text-align: center; }
-.lr-host { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
-.lr-link { color: var(--indigo); font-weight: 600; }
+.ss .lv-entry { width: min(420px, 100%); display: flex; flex-direction: column; gap: 14px; text-align: center; align-items: stretch; padding: 28px; }
+.ss .lv-entry .mark { align-self: center; }
+.ss .lv-entry h2 { margin: 0; }
+.ss .lv-entry input, .ss .lv-start input { font: inherit; padding: 12px 14px; border-radius: 11px; border: 1px solid var(--line); background: #fff; min-width: 0; }
+.ss .lv-link { color: var(--brand); font-weight: 600; }
 
-.lr-codecard { text-align: center; background: var(--card); border-radius: 26px; padding: 18px 28px; box-shadow: var(--shadow); border: 2px dashed var(--brand); }
-.lr-codecard small { display: block; color: var(--muted); }
-.lr-codecard b { display: block; font-size: 2.6rem; letter-spacing: .25em; color: var(--indigo); margin: 4px 0 0 .25em; }
-.lr-done { margin: 8px 0; padding: 10px 14px; border-radius: 16px; background: var(--grad-indigo, #e8eaff); color: #fff; font-weight: 600; text-align: center; }
-.lr-caption { text-align: center; font-weight: 500; color: var(--ink); }
-.lr-duplex { display: block; margin: 6px 4px; font-size: .9rem; color: var(--muted, #666); }
-.lr-caption, .lr-duplex, .lr-controls, .lr-plan, .lr-done, .lr-heard { flex-shrink: 0; }  /* in a column that is shorter than its content the boxes must not shrink under their text */
-.lr-steps { list-style: none; display: flex; gap: 6px; padding: 0; margin: 0 0 6px; overflow-x: auto; flex-shrink: 0; }
-.lr-steps li { flex: none; font-size: .78rem; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 3px 10px; color: var(--muted); white-space: nowrap; }
-.lr-talk { font-size: 1.3rem; padding: 16px 28px; width: 100%; box-sizing: border-box; }
-.lr-mine { display: flex; flex-direction: column; gap: 8px; }
-.lr-mine .lr-input { max-width: none; padding: 10px 16px; font-size: 1rem; }
+.ss .lv-wait { display: flex; flex-direction: column; align-items: center; gap: 18px; padding: 32px 20px; }
+.ss .lv-codecard { text-align: center; background: var(--brand-soft); border-radius: 18px; padding: 16px 34px; }
+.ss .lv-codecard small { display: block; color: var(--muted); }
+.ss .lv-codecard b { display: block; font-size: 40px; letter-spacing: 8px; color: var(--brand); margin: 4px 0 0 8px; }
+.ss .lv-big { font-size: 19px; font-weight: 600; text-align: center; margin: 0; }
+.ss .lv-people { display: flex; flex-wrap: wrap; gap: 8px 22px; justify-content: center; }
+.ss .lv-start { display: flex; gap: 10px; width: min(560px, 100%); flex-wrap: wrap; }
+.ss .lv-start input { flex: 1 1 260px; }
+.ss .lv-unlock { margin: 0 0 14px; width: 100%; justify-content: center; animation: lvglow 1.6s ease-in-out infinite; }  /* glows, never moves: a moving button is hard to tap */
+@keyframes lvglow { 50% { box-shadow: 0 0 0 8px var(--brand-soft); } }
 
-
-.lr-question { margin: 6px 0 0; padding: 8px 12px; border-radius: 14px; background: #fff4d6; border: 2px solid #f5c542; font-weight: 700; font-size: 1.05rem; text-align: center; flex-shrink: 0; }
+.ss .lv-stage { grid-template-columns: minmax(0, 1fr) 340px; }
+.ss .lv-board { display: flex; flex-direction: column; background: #fff; border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow); overflow: hidden; min-width: 0; }
+.ss .lv-teacher { display: flex; gap: 12px; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.ss .lv-teacher .tav { width: 44px; height: 44px; border-radius: 50%; background: #ffedd5; display: grid; place-items: center; font-size: 24px; flex: none; }
+.ss .lv-state { color: var(--teal); font-size: 13px; font-weight: 600; }
+.ss .lv-bwrap { display: flex; height: clamp(320px, 56vh, 560px); padding: 10px 14px; background: linear-gradient(#fff, #fcfcff); }
+.ss .lv-board .qban { margin: 0 14px 10px; }
+.ss .lv-board .cap { min-height: 3.2em; display: flex; align-items: center; justify-content: center; }
+.ss .lv-status { margin: 0; padding: 6px 16px; color: var(--brand); font-weight: 600; font-size: 14px; background: var(--brand-soft); }
 
 /* ONE screen: heading, then a picture or figure that takes the room that is left (it shrinks, never cut), then the key words */
-.lr-board .board { flex-direction: column; flex-wrap: nowrap; justify-content: flex-start; align-content: stretch; align-items: stretch; gap: 8px; overflow: hidden; }
-.lr-board .el { flex: 0 0 auto; }
-.lr-board .el-image, .lr-board .el-figure { flex: 1 1 0; min-height: 0; }
-.lr-board .el-image > div, .lr-board .el-figure > div { height: 100%; }  /* the wrapper div (class fx only while an effect plays) */
-.lr-board .el-image figure, .lr-board .el-figure figure { height: 100%; margin: 0; display: flex; flex-direction: column; align-items: center; }
-.lr-board .el-image img { flex: 1 1 0; min-height: 0; width: 100%; height: 100%; max-height: none; aspect-ratio: auto; object-fit: contain; }
-.lr-board .figure-box { flex: 1 1 0; min-height: 0; width: 100%; max-width: 420px; overflow: hidden; }
-.lr-board .figure-host { width: 100%; }
+.ss .lv-bwrap .board { flex: 1; min-width: 0; border: 0; border-radius: 0; box-shadow: none; background: transparent; flex-direction: column; flex-wrap: nowrap; justify-content: flex-start; align-content: stretch; align-items: stretch; gap: 8px; overflow: hidden; padding: 4px; }
+.ss .lv-bwrap .el { flex: 0 0 auto; }
+.ss .lv-bwrap .el-image, .ss .lv-bwrap .el-figure { flex: 1 1 0; min-height: 0; }
+.ss .lv-bwrap .el-image > div, .ss .lv-bwrap .el-figure > div { height: 100%; }  /* the wrapper div (class fx only while an effect plays) */
+.ss .lv-bwrap .el-image figure, .ss .lv-bwrap .el-figure figure { height: 100%; margin: 0; display: flex; flex-direction: column; align-items: center; }
+.ss .lv-bwrap .el-image img { flex: 1 1 0; min-height: 0; width: 100%; height: 100%; max-height: none; aspect-ratio: auto; object-fit: contain; }
+.ss .lv-bwrap .figure-box { flex: 1 1 0; min-height: 0; width: 100%; max-width: 420px; overflow: hidden; }
+.ss .lv-bwrap .figure-host { width: 100%; }
+.ss .lv-bwrap .el-figure figcaption { display: none; }
+.ss .lv-bwrap .note-heading { font-size: 1.3rem; } .ss .lv-bwrap .note-body { font-size: 1.05rem; } .ss .lv-bwrap .note-key { font-size: 1.1rem; } .ss .lv-bwrap .note-bullet { font-size: 1.05rem; }
 
-/* compact: the board gets the room (a figure shrunk to fit becomes unreadable) */
-.lr-top { padding: 6px 0; }
-.lr-stage { min-height: 52vh; }
-.lr-board .note-heading { font-size: 1.12rem; } .lr-board .note-body { font-size: 1rem; } .lr-board .note-key { font-size: 1.05rem; } .lr-board .note-bullet { font-size: 1rem; }
-.lr-board .el-figure figcaption { display: none; }
-.lr-controls { gap: 6px; padding-top: 4px; }
-.lr-mine { padding: 8px 10px; }
-.lr-talk { padding-top: 10px; padding-bottom: 10px; font-size: 1.05rem; }
-.lr-host .lr-btn { padding: 6px 14px; font-size: .9rem; }
-.lr-caption { margin: 4px 0; padding: 6px 12px; }
+.ss .lv-side { display: grid; gap: 16px; align-content: start; }
+.ss .lv-ctrl { display: flex; flex-direction: column; gap: 10px; }
+.ss .lv-ctrl .chatin { margin-top: 0; }
+.ss .lv-mic { margin: 0 0 8px; font-weight: 700; color: var(--teal); animation: lvblink 1.2s infinite; }
+@keyframes lvblink { 50% { opacity: .55; } }
+.ss .lv-hint { margin: 0; color: var(--muted); font-size: 14px; }
+.ss .lv-heard { margin: 0; padding: 8px 12px; border-radius: 10px; background: var(--brand-soft); font-size: 14px; }
+.ss .lv-done { margin: 0; }
+
+/* phone: one column; the speak button stays within reach while the board is on screen */
+@media (max-width: 1000px) {
+  .ss .lv { padding: 12px 12px 20px; }
+  .ss .lv-stage { display: flex; flex-direction: column; gap: 12px; }
+  .ss .lv-side { display: contents; }
+  .ss .lv-ctrl { position: sticky; bottom: 8px; z-index: 4; box-shadow: 0 8px 28px rgba(15, 23, 42, .18); order: 2; }
+  .ss .lv-board { order: 1; }
+  .ss .lv-done, .ss .lv-plan, .ss .lv-members { order: 3; }
+  .ss .lv-bwrap { height: clamp(240px, 38vh, 400px); }
+}

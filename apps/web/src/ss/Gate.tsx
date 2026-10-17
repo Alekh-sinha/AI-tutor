@@ -51,10 +51,9 @@ export function Gate({ children, title = "Sign in to continue" }: { children: Re
   if (me.status !== "active") {
     return (
       <div className="card gate">
-        <h2>Welcome{me.name ? `, ${me.name.split(" ")[0]}` : ""}!</h2>
-        <p className="sub">Your account is created. To use live classes and lesson creation, the admin needs to approve it and give you some credit. You can still watch the free lessons in the meantime.</p>
-        <RequestBox kind="access" />
-        {me.recent_decisions?.[0]?.type === "access" && me.recent_decisions[0].status === "rejected" && <p className="t-warn">Your last request was not approved. You can send another one.</p>}
+        <h2>Approval needed</h2>
+        <p className="sub">This part needs an approved account. Your request has been sent to the admin (see the note at the top of the page). You can keep watching the free lessons meanwhile.</p>
+        {me.recent_decisions?.[0]?.type === "access" && me.recent_decisions[0].status === "rejected" && <><p className="t-warn">Your last request was not approved. You can send another one.</p><RequestBox kind="access" /></>}
       </div>
     );
   }
