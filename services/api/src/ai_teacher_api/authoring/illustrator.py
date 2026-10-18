@@ -213,7 +213,7 @@ Natural spoken Hindi, short sentences, familiar words, talking to the child as a
 used and explained. Not babyish, not formal, no unexplained English jargon. Do not assume lab equipment, internet, money or an adult's help.
 
 # Output
-A lesson is at most 10 minutes spoken, so the whole lecture is about 900-1200 words: choose the examples that teach best and keep it tight.
+A lesson video can be at most 10 minutes: a longer one cannot be made at all, and the reviewers will send it back to be cut. The video also speaks every sentence of your lecture, plus pauses for the questions, so the whole lecture must be between 900 and 1200 words (count as you write; 1250 is the hard limit). A child also keeps attention for about ten minutes, so choose the one or two examples per idea that teach best instead of every example the book has, and say each thing once.
 Write the complete lesson in Hindi as markdown: an opening that makes the child curious; then for each concept its learning aim, the teacher's spoken words
 with pictures placed where the teacher points (![what the child sees and why](file_name)), the misconception, and one check question with options A, B, C,
 a line "[Pause]", and the correct answer with a short explanation (no new ideas in it). The question tests the aim, ideally in a slightly different

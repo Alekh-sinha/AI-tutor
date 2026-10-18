@@ -20,7 +20,7 @@ from google.genai import types
 from ai_teacher_api.authoring import illustrator as ill
 from ai_teacher_api.common import logsetup
 from ai_teacher_api.common.resilience import with_model_fallback
-from ai_teacher_api.authoring.review import critique_lecture, lecture_checks, lecture_images
+from ai_teacher_api.authoring.review import MAX_TOTAL_WORDS, IMG_REF, critique_lecture, lecture_checks, lecture_images, length_issue
 from ai_teacher_api.common.settings import DEFAULT_TEXT_MODEL, REVIEW_MODEL, REVIEW_PASSES, resolve_model
 
 log = logsetup.get("authoring")
@@ -28,6 +28,11 @@ MAX_ROUNDS = 3
 IMAGE_BUDGET_PER_ROUND = 10
 MAX_LLM_CALLS = 40
 MAX_TRIES_PER_PICTURE = 2
+MAX_TRIM_ROUNDS = 3
+
+
+class LectureTooLong(RuntimeError):
+    pass
 
 
 @dataclass
@@ -90,6 +95,9 @@ less (change the narration and the picture description so they say only what the
 changed any more: only the narration and the description may change, to claim only what the picture clearly shows. A text problem is fixed by editing the text.
 For a stretch of narration with nothing new on screen, add one SIMPLE STILL photograph (an object, a material or a step; nothing that needs motion) with a new name
 where the point changes. Pictures are photographs with no text; definitions and labels belong in the narration.
+A LENGTH issue is fixed by cutting text with replace_text (use several calls, each removing one sentence or one paragraph; `new` may be empty or a shorter version):
+cut examples and repetition first, never a concept's aim, its check question with options and answer, or the recap; when you remove the paragraph a picture belongs to, remove
+that picture line too, and keep every picture line whose paragraph stays. Count what you cut: reach the number the issue asks for.
 When every issue is handled, reply 'done' with one line per issue saying what you did.
 
 Tools: view_picture(name); edit_image(name, change) changes only what you ask, so keep it to one concrete change; generate_image(name, prompt) only for a NEW picture;
@@ -179,6 +187,23 @@ async def improve(d: Path, plan_text: str, md: str, concepts: int, model: str = 
         for i in findings.lines():
             print("  -", i[:200], flush=True)
     (d / "lecture.md").write_text(md)
+    for k in range(1, MAX_TRIM_ROUNDS + 1):  # the length limit is HARD: the video is rejected above 10 minutes, so the editor keeps cutting until it fits (code counts, no reviewer needed)
+        issue = length_issue(md)
+        if not issue:
+            break
+        before = len(IMG_REF.sub("", md).split())
+        stats = {"llm_calls": 0, "prompt_tokens": 0, "output_tokens": 0, "tools": {}}
+        new_md, _ = await with_model_fallback(lambda m: run_editor(m, d, md, Findings(text=[issue]), set(), stats), model)
+        md = new_md or md
+        (d / "lecture.md").write_text(md)
+        after = len(IMG_REF.sub("", md).split())
+        log.info("trim-round", round=k, words_before=before, words_after=after, limit=MAX_TOTAL_WORDS, reply=stats.get("reply", ""))
+        print(f"=== trim round {k}: {before} -> {after} words (limit {MAX_TOTAL_WORDS})", flush=True)
+        rounds.append({"trim_round": k, "words_before": before, "words_after": after})
+    if length_issue(md):
+        raise LectureTooLong(f"the lecture still has {len(IMG_REF.sub('', md).split())} words after {MAX_TRIM_ROUNDS} trim rounds (limit {MAX_TOTAL_WORDS}): shorten it in the Lecture tab, then build the video again")
+    if any(r.get("trim_round") for r in rounds):  # the trim may have changed what the code checks look at (pictures, questions): check again
+        findings = Findings(text=[t for t in findings.text if not t.startswith("[check]")] + lecture_checks(md, d, concepts), pictures=findings.pictures, doubtful=findings.doubtful)
     archived = archive_unused(d, md)  # unused pictures left after all rounds are leftovers of earlier versions: archived, not nagged about forever
     if archived:
         findings = Findings(text=[t for t in findings.text if "drawn but are not used" not in t], pictures=findings.pictures, doubtful=findings.doubtful)

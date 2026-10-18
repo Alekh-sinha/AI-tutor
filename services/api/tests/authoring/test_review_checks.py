@@ -32,7 +32,7 @@ def test_unused_and_missing_pictures_and_length(tmp_path: Path):
         Image.new("RGB", (8, 8)).save(tmp_path / f"{n}.webp")
     md = "![d](used)\n![e](ghost)\n" + " ".join(["शब्द"] * 1300)
     issues = " ".join(lecture_checks(md, tmp_path, 1))
-    assert "spare" in issues and "never drawn" in issues and "ghost" in issues and "at most" in issues
+    assert "spare" in issues and "never drawn" in issues and "ghost" in issues and "CUT AT LEAST" in issues
 
 
 def test_archive_unused_moves_but_never_deletes(tmp_path: Path):
@@ -42,3 +42,11 @@ def test_archive_unused_moves_but_never_deletes(tmp_path: Path):
         Image.new("RGB", (8, 8)).save(tmp_path / f"{n}.webp")
     assert archive_unused(tmp_path, "![d](used)") == ["spare"]
     assert (tmp_path / "unused" / "spare.webp").exists() and (tmp_path / "used.webp").exists()
+
+
+def test_length_issue_says_how_much_to_cut():
+    from ai_teacher_api.authoring.review import MAX_TOTAL_WORDS, length_issue
+
+    assert length_issue(" ".join(["शब्द"] * MAX_TOTAL_WORDS)) == ""
+    msg = length_issue("![d](x)\n" + " ".join(["शब्द"] * 1375))
+    assert "1375" in msg and "CUT AT LEAST 175 WORDS" in msg

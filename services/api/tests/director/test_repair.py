@@ -133,3 +133,11 @@ def test_clear_without_a_new_item_is_moved_to_the_next_item():
     s = script(line("एक", BoardCue(kind="clear")), line("दो", BoardCue(kind="note", id="n", text="x")))
     assert repair.fix_blank_clears(s) == 1
     assert [c.kind for c in s.lines[0].cues] == [] and s.lines[1].cues[0].kind == "clear"
+
+
+def test_restore_does_not_repeat_a_sentence_the_director_moved_earlier():
+    """Round 2 of the director may reorder lines; a sentence said BEFORE the anchor is not missing (restoring it made the video say it 2-3 times and run over 10 minutes)."""
+    md = "पहला वाक्य यहाँ है।\n\nदूसरा वाक्य यहाँ है।\n\nतीसरा वाक्य यहाँ है।\n"
+    s = script(line("तीसरा वाक्य यहाँ है।"), line("पहला वाक्य यहाँ है।"), line("दूसरा वाक्य यहाँ है।"))
+    assert repair.restore_missing(md, s) == []
+    assert len(s.lines) == 3

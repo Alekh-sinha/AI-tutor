@@ -17,3 +17,4 @@ docs/source/
 .vscode/
 .DS_Store
 *.webm
+apps/web/public/lessons/t103-*.json

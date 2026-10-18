@@ -230,6 +230,16 @@ def attention_gaps(md: str) -> list[str]:
     return out
 
 
+def length_issue(md: str) -> str:
+    """Empty when the lecture fits; otherwise how much to cut (a number to reach works better than a limit to stay under)."""
+    words = len(IMG_REF.sub("", md).split())
+    if words <= MAX_TOTAL_WORDS:
+        return ""
+    cut = words - MAX_TOTAL_WORDS + 50  # a little under the limit, so a later small addition does not break it again
+    return (f"[check] LENGTH: the lecture has {words} words and the limit is {MAX_TOTAL_WORDS} (a video longer than 10 minutes cannot be published). CUT AT LEAST {cut} WORDS, about {round(100 * cut / words)}% of the lecture: "
+            "remove the least essential examples, repeated explanations and second examples of an idea already clear; shorten long sentences. Keep every concept, its aim, its check question with the answer, and the recap")
+
+
 def lecture_checks(md: str, img_dir: Path, concepts_expected: int) -> list[str]:
     """Plain-code checks an LLM critic would only guess at."""
     issues = []
@@ -251,8 +261,8 @@ def lecture_checks(md: str, img_dir: Path, concepts_expected: int) -> list[str]:
         issues.append("[check] the lecture contains LaTeX markup ($...$, \\text{}, \\rightarrow): write formulas as plain Unicode text, e.g. 4Al + 3O₂ → 2Al₂O₃ (the voice would read the markup aloud)")
     issues += attention_gaps(md)
     words = len(IMG_REF.sub("", md).split())
-    if words > MAX_TOTAL_WORDS:
-        issues.append(f"[check] the lecture has about {words} words; a lesson must be at most {MAX_TOTAL_WORDS} (10 minutes spoken): cut the least essential examples and repetition, keep every concept, question and the recap")
+    if length_issue(md):
+        issues.append(length_issue(md))
     if words < MIN_TOTAL_WORDS:
         issues.append(f"[check] the lecture has about {words} words; a 5-minute lesson needs at least {MIN_TOTAL_WORDS}: teach each concept more fully")
     return issues

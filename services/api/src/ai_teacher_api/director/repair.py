@@ -83,6 +83,10 @@ def restore_missing(md: str, script: LessonScript, min_overlap: float = 0.5) -> 
             ov = len(toks & line_tokens[i]) / max(1, len(toks))
             if ov > best:
                 best, best_i = ov, i
+        if best < min_overlap:  # not after the anchor: it may still be said earlier (the director moved things); then it is NOT missing, and inserting it again would say it twice
+            best_any = max((len(toks & lt) / max(1, len(toks)) for lt in line_tokens), default=0.0)
+            if best_any >= min_overlap:
+                continue
         if best >= min_overlap:
             anchor = best_i
         else:
