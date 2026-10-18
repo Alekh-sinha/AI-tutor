@@ -151,6 +151,8 @@ async def chat(body: ChatIn, u: dict = Depends(auth.active_user)) -> StreamingRe
     else:
         context, pics = f"No lesson is open: this is a free question about the child's studies.\nON THE BOARD NOW: nothing (plain chat).", {}
     head = context if first else (f"ON THE BOARD NOW: {st['board'] or 'empty'}" if body.mode == "teach" else "")
+    if lesson and body.mode != "teach" and not first:
+        head = tutor.position_note(lesson, body.t)
     if body.mode == "teach" and first:
         head += "\n\n" + (tutor.LIVE_START if lesson else tutor.LIVE_START_TOPIC)
     if body.interrupted_after:

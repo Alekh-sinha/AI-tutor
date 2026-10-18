@@ -249,12 +249,20 @@ def lesson_context(lesson: dict, t: float, book_points: str, board: list[dict], 
     text = (
         f"LESSON: {lesson['title']}\n\nBOOK POINTS (authority):\n{book_points or '(none)'}\n\n"
         + ("THE RECORDED LESSON ON THIS TOPIC (for your reference; teach in your own live words, do not read it):\n" + "\n".join(n["text"] for n in lesson["narration"])
-           if live else "WHAT THE TEACHER HAS TAUGHT SO FAR:\n" + "\n".join(done[-60:])
+           if live else "THE WHOLE LESSON, in order (what the teacher intends to teach in this video; use it to see what the child has been taught, what is still to come, and how the lesson explains each idea, "
+           "so that your answer matches it and does not contradict it):\n" + "\n".join(n["text"] for n in lesson["narration"])
+           + "\n\nWHAT THE TEACHER HAS TAUGHT SO FAR (up to where the child is now):\n" + "\n".join(done[-60:])
            + "\n\nWHAT COMES NEXT IN THE LESSON (the child has not heard it yet):\n" + "\n".join(ahead[:25]))
         + "\n\nLESSON PICTURES you may show (name: caption): " + "; ".join(f"{k}: {v}" for k, v in caps.items())
         + f"\n\nON THE BOARD NOW: {board or 'empty'}"
     )
     return text, pics
+
+
+def position_note(lesson: dict, t: float) -> str:
+    """Where the child is in the video right now, for every question (the full context is only sent with the first one, and the child may have watched on since)."""
+    heard = [n["text"] for n in lesson["narration"] if n["end"] <= t][-3:]
+    return "WHERE THE CHILD IS IN THE VIDEO NOW (the last lines they heard): " + (" / ".join(heard) if heard else "at the very start")
 
 
 def blob_part(b64: str, mime: str) -> types.Part:
