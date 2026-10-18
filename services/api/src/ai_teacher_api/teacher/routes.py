@@ -181,11 +181,11 @@ async def upload_chapter(chapter: str = Form(...), book: str = Form(...), pdf: U
         ch = parse.parse_chapter(d / "source.pdf", book)
         (d / "chapter.json").write_text(json.dumps(ch.model_dump(), ensure_ascii=False, indent=2) + "\n")
         progress("planning the lessons")
-        run_plan.run(d / "chapter.json", d / "plan.json", DEFAULT_TEXT_MODEL, "hi-IN", "Bihar", 6)
+        pages = run_plan.run(d / "chapter.json", d / "plan.json", DEFAULT_TEXT_MODEL, "hi-IN", "Bihar", 6)
         plan = json.loads((d / "plan.json").read_text())
         plan["book"] = book  # the name the teacher typed (the planner does not store it)
         (d / "plan.json").write_text(json.dumps(plan, ensure_ascii=False, indent=2) + "\n")
-        return {"lessons": len(plan["lessons"])}
+        return {"lessons": len(plan["lessons"]), **pages}
 
     try:
         job = jobs.start("plan", f"chapter {chapter}", work, needs_images=False)

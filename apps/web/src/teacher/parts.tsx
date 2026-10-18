@@ -139,8 +139,10 @@ export function JobBox({ job, onDone }: { job: Job; onDone: () => void }) {
     return () => clearInterval(t);
   }, [job.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const lessons = j.result?.lessons;
+  const used = j.result?.pages_used, total = j.result?.pages_total;
+  const cut = typeof used === "number" && typeof total === "number" && used < total ? ` ⚠️ The PDF is very long (${total} pages): only the first ${used} pages were used. Please upload one chapter at a time for best results.` : "";
   const done = typeof j.result?.public_id === "string" ? "✓ The video is ready — watch it with the button below."
-    : typeof lessons === "number" ? `✓ Chapter read: ${lessons} lessons planned. The videos are not made yet — press Generate next to a lesson (each video takes about 20–30 minutes).`
+    : typeof lessons === "number" ? `✓ Chapter read: ${lessons} lessons planned.${cut}  The videos are not made yet — press Generate next to a lesson (each video takes about 20–30 minutes).`
     : "✓ Done";
   const eta = j.label.includes("/") ? "about 20–30 minutes" : "a minute or two";
   return (
