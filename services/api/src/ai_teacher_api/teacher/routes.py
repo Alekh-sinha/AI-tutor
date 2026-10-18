@@ -121,6 +121,14 @@ def _view(lesson: str, chapter: str) -> dict:
 
 
 # ---------------------------------------------------------------- chapters and generation
+def _book_name(d, fallback: str) -> str:
+    """Chapters planned before the plan stored the name: take it from chapter.json (what the teacher typed at upload)."""
+    try:
+        return json.loads((d / "chapter.json").read_text()).get("book") or fallback
+    except (OSError, ValueError):
+        return fallback
+
+
 @router.get("/chapters", dependencies=[Depends(auth)])
 def chapters() -> list[dict]:
     out = []
@@ -139,7 +147,7 @@ def chapters() -> list[dict]:
             lessons.append({"id": l["id"], "title": l["title"], "has_lecture": has_lecture, "has_video": (WEB_PUBLIC / "lessons" / f"{pid}.json").exists(),
                             "public_id": pid, "pending": len(_pending(f)) if f.exists() else 0, "live": pub["live"], "version": pub["version"],
                             "draft": pub["lecture_changed"] or pub["video_changed"], "lecture_changed": pub["lecture_changed"], "video_changed": pub["video_changed"]})
-        out.append({"id": c, "book": plan.get("book", c), "lessons": lessons})
+        out.append({"id": c, "book": plan.get("book") or _book_name(p.parent, c), "lessons": lessons})
     return out
 
 
@@ -174,7 +182,10 @@ async def upload_chapter(chapter: str = Form(...), book: str = Form(...), pdf: U
         (d / "chapter.json").write_text(json.dumps(ch.model_dump(), ensure_ascii=False, indent=2) + "\n")
         progress("planning the lessons")
         run_plan.run(d / "chapter.json", d / "plan.json", DEFAULT_TEXT_MODEL, "hi-IN", "Bihar", 6)
-        return {"lessons": len(json.loads((d / "plan.json").read_text())["lessons"])}
+        plan = json.loads((d / "plan.json").read_text())
+        plan["book"] = book  # the name the teacher typed (the planner does not store it)
+        (d / "plan.json").write_text(json.dumps(plan, ensure_ascii=False, indent=2) + "\n")
+        return {"lessons": len(plan["lessons"])}
 
     try:
         job = jobs.start("plan", f"chapter {chapter}", work, needs_images=False)
