@@ -92,6 +92,7 @@ export function LiveRoom({ code, name, hostKey, onLeave }: { code: string; name:
                 {lastHeard && <p className="lv-heard">🧒 {lastHeard.name}: {lastHeard.text}</p>}
                 {r.me.host && <button className="btn" onClick={r.next} disabled={r.state.teacher_busy}><Icon n="arrow" sm /> आगे बढ़िए</button>}
               </div>
+              <div className="note-bar lv-stuck"><span>ℹ️ अगर क्लास कहीं अटक जाए (टीचर चुप हो जाएँ), तो {r.me.host ? "“आगे बढ़िए” दबाइए" : "होस्ट से “आगे बढ़िए” दबाने को कहिए"}।</span></div>
               {r.state.finished && <div className="note-bar lv-done"><span>🎓 क्लास पूरी हुई — अब आप टीचर से बात करके कोई भी सवाल पूछ सकते हैं।</span></div>}
               {r.state.plan.length > 0 && (
                 <div className="card panel lv-plan"><h3>आज की कक्षा</h3>
