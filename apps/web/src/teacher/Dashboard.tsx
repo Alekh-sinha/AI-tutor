@@ -41,7 +41,7 @@ function Chapters({ chapters, jobs, open, onJob, onChange }: { chapters: Chapter
       <div className="drop" style={{ padding: 24, marginBottom: 22 }}>
         <div className="row" style={{ justifyContent: "center", flexWrap: "wrap" }}>
           <div style={{ fontSize: 30 }}>📄</div>
-          <div style={{ textAlign: "left" }}><b>Upload a chapter PDF</b><div style={{ color: "var(--muted)" }}>We read the chapter and plan the lessons (a few minutes). Each video then takes about 20–30 minutes.</div></div>
+          <div style={{ textAlign: "left" }}><b>Upload a chapter PDF</b><div style={{ color: "var(--muted)" }}>We read the chapter and plan the lessons (about a minute).</div></div>
           <input className="t-input" placeholder="Book and chapter name" value={book} onChange={(e) => setBook(e.target.value)} />
           <label className="btn pri"><Icon n="upload" sm />Choose PDF<input type="file" accept="application/pdf" hidden onChange={(e) => void upload(e.target.files?.[0])} /></label>
         </div>

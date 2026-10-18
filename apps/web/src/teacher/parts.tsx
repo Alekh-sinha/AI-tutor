@@ -142,9 +142,7 @@ export function JobBox({ job, onDone }: { job: Job; onDone: () => void }) {
   const done = typeof j.result?.public_id === "string" ? "✓ The video is ready — watch it with the button below."
     : typeof lessons === "number" ? `✓ Chapter read: ${lessons} lessons planned. The videos are not made yet — press Generate next to a lesson (each video takes about 20–30 minutes).`
     : "✓ Done";
-  const eta = j.label.endsWith(" video") ? "about a minute"
-    : j.label.includes("/") ? "about 20–30 minutes"
-    : "a few minutes for the chapter to be read; after that, each video takes about 20–30 minutes to make";
+  const eta = j.label.includes("/") ? "about 20–30 minutes" : "a minute or two";
   return (
     <div className="t-box">
       <b>{j.label}</b>
