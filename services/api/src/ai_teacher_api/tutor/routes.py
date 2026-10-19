@@ -67,6 +67,7 @@ def _lesson(lesson_id: str) -> dict | None:
 async def _run_turn(body: ChatIn, turn: tutor.Turn, parts: list[types.Part], kinds: list[str], prep_parts: list[types.Part] | None = None) -> None:
     tutor.CURRENT.set(turn)
     q, t0, tools = turn.queue, time.time(), {}
+    steps: list[list] = []  # [what, seconds since the turn began]: where the time went (a 149 s answer once left no trace of the slow step)
     err = ""
     plain = body.mode == "chat"
     try:
@@ -84,6 +85,7 @@ async def _run_turn(body: ChatIn, turn: tutor.Turn, parts: list[types.Part], kin
         async for e in (_chat_runner if plain else _runner).run_async(user_id="student", session_id=body.session_id, new_message=msg, run_config=RunConfig(max_llm_calls=25)):
             for c in e.get_function_calls():
                 tools[c.name] = tools.get(c.name, 0) + 1
+                steps.append([f"call:{c.name}", round(time.time() - t0, 1)])
                 label = THINKING_LABELS.get(c.name, "")
                 if label:
                     q.put_nowait({"type": "thinking", "text": label})
@@ -91,6 +93,7 @@ async def _run_turn(body: ChatIn, turn: tutor.Turn, parts: list[types.Part], kin
                 if p.thought and p.text:
                     q.put_nowait({"type": "thought", "text": p.text.strip()[:600]})  # English summary: shown only in the debug view
                 elif p.text and e.is_final_response() and not e.get_function_calls():
+                    steps.append(["final-answer", round(time.time() - t0, 1)])
                     if plain:
                         final += p.text
                     elif turn.said == 0:
@@ -101,6 +104,7 @@ async def _run_turn(body: ChatIn, turn: tutor.Turn, parts: list[types.Part], kin
             if body.voice_reply or "audio" in kinds:
                 q.put_nowait({"type": "thinking", "text": "आवाज़ बना रहा हूँ…"})
                 audio = await plain_chat.speak(final, body.voice, body.session_id)
+                steps.append(["voice-made", round(time.time() - t0, 1)])
             q.put_nowait({"type": "text", "text": final.strip(), "audio": audio})
     except Exception as ex:  # noqa: BLE001
         err = repr(ex)[:400]
@@ -108,7 +112,7 @@ async def _run_turn(body: ChatIn, turn: tutor.Turn, parts: list[types.Part], kin
         q.put_nowait({"type": "error", "text": "कुछ गड़बड़ हो गई, फिर से पूछिए।", "detail": err[:200]})
     finally:
         log.info("turn", session=body.session_id, lesson=body.lesson_id, mode=body.mode, inputs=kinds, question=body.text[:200], tools=tools,
-                 said=turn.said, new_pictures=turn.new_pictures, seconds=round(time.time() - t0, 1), error=err)
+                 said=turn.said, new_pictures=turn.new_pictures, seconds=round(time.time() - t0, 1), steps=steps, error=err)
         q.put_nowait({"type": "done"})
 
 
