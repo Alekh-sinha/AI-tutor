@@ -63,6 +63,12 @@ async def reserve() -> _Bucket:
         await _sleep(min(wait, 5.0) + 0.1)
 
 
+def wait_seconds() -> float:
+    """How long until some image model has room for one more request (0 = now). Does not reserve anything: lets a caller decide to go without a picture instead of queueing."""
+    now = _now()
+    return max(0.0, min(b.free_at(now) for b in _buckets) - now)
+
+
 def _save(data: bytes, path: Path) -> None:
     img = Image.open(io.BytesIO(data)).convert("RGB")
     img.thumbnail((768, 768))

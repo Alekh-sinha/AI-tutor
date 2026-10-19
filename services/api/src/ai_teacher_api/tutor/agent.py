@@ -18,13 +18,17 @@ from google.adk.planners import BuiltInPlanner
 from google.genai import types
 
 from ai_teacher_api.safety import policy
-from ai_teacher_api.common import logsetup, workspace
+from ai_teacher_api.common import logsetup, picturegen
 from ai_teacher_api.common.settings import WEB_PUBLIC, retrying_model
 from ai_teacher_api.authoring import illustrator as ill
 
 log = logsetup.get("tutor")
 MAX_SAY_CHARS = 400
 MAX_NEW_PICTURES_PER_TURN = 2
+IMAGE_SLOT_WAIT_S = 20  # a new picture needs a free slot of the image quota (2 requests a minute per model, shared by everybody): if none is free within this, go without a picture
+IMAGE_TOTAL_S = 45  # slot wait + drawing: after this the child gets the answer without the picture
+NO_PICTURE = ("a new picture is not available at this moment (the drawing service is busy with other learners): do not wait for it. Use a lesson picture with show_lesson_picture if one fits, "
+              "otherwise explain in words; answer the child's question fully, and do not apologise or mention this")
 
 
 @dataclass
@@ -147,7 +151,7 @@ async def show_lesson_picture(name: str, caption: str = "") -> dict:
 
 
 async def draw_picture(description: str, caption: str = "") -> dict:
-    """Draw a NEW realistic photograph for the board when none of the lesson's pictures fits (slow: up to a minute; at most two per answer). You get it back to check.
+    """Draw a NEW realistic photograph for the board when none of the lesson's pictures fits (up to 45 seconds; may be unavailable when other learners are drawing; at most two per answer). You get it back to check.
 
     This image model draws still, simple scenes well (one or two objects, materials side by side, a person doing a simple thing). It draws badly: motion, things
     collapsing or pouring, exact counts, tiny parts, anything needing text. Describe a single still moment.
@@ -160,26 +164,29 @@ async def draw_picture(description: str, caption: str = "") -> dict:
     if t.new_pictures >= MAX_NEW_PICTURES_PER_TURN:
         return {"status": "error", "error": "you already drew the most pictures allowed for one answer; explain in words or reuse a lesson picture"}
     t.new_pictures += 1
-    if not workspace.try_acquire(f"tutor picture {t.session_id}"):
-        log.warn("draw-busy", session=t.session_id, holder=workspace.holder["who"])
-        return {"status": "error", "error": "the picture tools are busy right now: explain in words or use a lesson picture"}
+    wait = picturegen.wait_seconds()
+    if wait > IMAGE_SLOT_WAIT_S:  # every image model is at its quota: do not queue the child behind other learners
+        log.warn("draw-unavailable", session=t.session_id, wait_seconds=round(wait))
+        return {"status": "error", "error": NO_PICTURE}
     _push({"type": "thinking", "text": "चित्र बना रहा हूँ…"})
     name = _new_id("p")
     out_dir = WEB_PUBLIC / "chat" / re.sub(r"[^A-Za-z0-9_-]", "", t.session_id)
-    ill.configure(out_dir, ill.IMAGE_MODEL)
-    ill.set_redraw_allowed(None)
-    ill.set_budget(3)
+    path = out_dir / f"{name}.webp"
     try:
-        res = await asyncio.to_thread(ill.generate_image, name, description)
-    finally:
-        workspace.release()
-    log.info("draw-picture", session=t.session_id, description=description[:300], status=res.get("status"), error=res.get("error", ""))
+        res = await asyncio.wait_for(picturegen.draw(description[:300], path), IMAGE_TOTAL_S)
+    except asyncio.TimeoutError:
+        log.warn("draw-timeout", session=t.session_id, description=description[:200])
+        return {"status": "error", "error": NO_PICTURE}
+    log.info("draw-picture", session=t.session_id, description=description[:300], status=res.get("status"), error=res.get("error", ""), seconds=res.get("seconds"))
     if res.get("status") != "ok":
-        return res
+        return {"status": "error", "error": NO_PICTURE}
     el = {"type": "image", "id": name, "src": f"/chat/{out_dir.name}/{name}.webp", "caption": caption.strip()[:40]}
     _board(el)
     _push({"type": "board", "op": "add", "el": el})
-    return {"status": "ok", "id": name, "photo": res["photo"]}  # returned so you can look at it
+    from PIL import Image
+
+    photo = types.Part.from_bytes(data=ill._jpeg(Image.open(path), 768, 80), mime_type="image/jpeg")
+    return {"status": "ok", "id": name, "photo": photo}  # returned so you can look at it
 
 
 async def clear_board() -> dict:
