@@ -15,7 +15,7 @@ type ServerEvent =
 export interface Send { text?: string; imageB64?: string; audioB64?: string }
 
 const SLOW_HINT_MS = 45_000;  // still waiting: say so
-const GIVE_UP_MS = 120_000;   // an answer normally takes 10-20 s: stop waiting and let the child ask again
+const GIVE_UP_MS = 180_000;   // an answer normally takes 10-20 s (a new picture adds up to 45 s): stop waiting and let the child ask again
 
 /** Plain chat with the teacher (POST /api/chat, mode "chat"): messages in, a text answer (plus voice when the child spoke or asked for it, plus a picture now and then) out. */
 export function useSimpleChat(lessonId: string, getTime: () => number) {

@@ -66,3 +66,54 @@ def test_lesson_context_live_vs_ask():
     ask, pics = tutor.lesson_context(lesson, 6, "points", [], live=False)
     live, _ = tutor.lesson_context(lesson, 6, "points", [], live=True)
     assert "HAS TAUGHT" in ask and "RECORDED LESSON" in live and pics == {"p": "/s"}
+
+
+async def test_draw_picture_goes_without_when_the_image_quota_is_full(monkeypatch):
+    from ai_teacher_api.common import picturegen
+
+    called = []
+
+    async def draw(*a, **k):
+        called.append(1)
+        return {"status": "ok"}
+
+    monkeypatch.setattr(picturegen, "wait_seconds", lambda: 90.0)
+    monkeypatch.setattr(picturegen, "draw", draw)
+    t = make_turn()
+    tutor.CURRENT.set(t)
+    r = await tutor.draw_picture("a kulhad")
+    assert r["status"] == "error" and "not available at this moment" in r["error"] and not called and not t.board
+
+
+async def test_draw_picture_gives_up_after_the_time_limit(monkeypatch):
+    from ai_teacher_api.common import picturegen
+
+    async def slow(*a, **k):
+        await asyncio.sleep(10)
+
+    monkeypatch.setattr(picturegen, "wait_seconds", lambda: 0.0)
+    monkeypatch.setattr(picturegen, "draw", slow)
+    monkeypatch.setattr(tutor, "IMAGE_TOTAL_S", 0.05)
+    tutor.CURRENT.set(make_turn())
+    r = await tutor.draw_picture("a kulhad")
+    assert r["status"] == "error" and "not available at this moment" in r["error"]
+
+
+async def test_draw_picture_success_shows_the_picture_and_returns_it(monkeypatch, tmp_path):
+    from PIL import Image
+
+    from ai_teacher_api.common import picturegen
+
+    async def draw(description, path, *a, **k):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        Image.new("RGB", (40, 30), "red").save(path, "WEBP")
+        return {"status": "ok", "seconds": 1.0}
+
+    monkeypatch.setattr(picturegen, "wait_seconds", lambda: 0.0)
+    monkeypatch.setattr(picturegen, "draw", draw)
+    monkeypatch.setattr(tutor, "WEB_PUBLIC", tmp_path)
+    t = make_turn()
+    tutor.CURRENT.set(t)
+    r = await tutor.draw_picture("a kulhad", "कुल्हड़")
+    assert r["status"] == "ok" and r["photo"] is not None
+    assert [e for e in t.board if e["type"] == "image"][0]["caption"] == "कुल्हड़"
